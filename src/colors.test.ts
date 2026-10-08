@@ -35,10 +35,12 @@ test("title dots follow the hue", () => {
 
 test("50 sessions get 50 distinct AAA colors", () => {
   const taken: string[] = [];
-  for (let i = 0; i < 50; i++) taken.push(distinctColor(taken, "AAA", `repo-${i}`));
+  for (let i = 0; i < 50; i++) taken.push(distinctColor(taken, "AAA"));
   assert.equal(new Set(taken).size, 50);
   for (const c of taken) assert.ok(checkContrast(c).aaa, c);
-  assert.ok(Object.values(PALETTE).includes(taken[0]) && taken[0] !== PALETTE.gray);
+  // Named colors first, in a fixed order.
+  assert.deepEqual(taken.slice(0, 3), [PALETTE.blue, PALETTE.orange, PALETTE.green]);
+  assert.deepEqual(new Set(taken.slice(0, 12)), new Set(Object.values(PALETTE)));
   let min = Infinity;
   for (let i = 0; i < taken.length; i++) for (let j = i + 1; j < taken.length; j++) min = Math.min(min, colorDistance(taken[i], taken[j]));
   console.log(`min OKLab distance across 50 colors: ${min.toFixed(3)}`);

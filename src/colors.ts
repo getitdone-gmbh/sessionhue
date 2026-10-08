@@ -122,26 +122,30 @@ function candidates(level: ContrastLevel): string[] {
 
 const poolCache = new Map<ContrastLevel, string[]>();
 
+/** Order in which named colors are handed out: neighbors differ as much as possible. */
+const NAMED_ORDER = ["blue", "orange", "green", "purple", "red", "teal", "amber", "pink", "indigo", "cyan", "brown", "gray"];
+
+/** Below this OKLab distance a named color counts as "already in use". */
+const SAME_COLOR = 0.03;
+
 /**
- * The color that differs most from all `taken` colors. Palette colors win
- * while they are still clearly distinct; after that generated shades fill in,
- * so 50 sessions still get 50 different colors.
+ * Next color for a new session or repo. Named palette colors come first, in a
+ * fixed order; once they are used up, generated shades fill in, each as far as
+ * possible from every taken color. 50 sessions still get 50 different colors.
  */
-export function distinctColor(taken: string[], level: ContrastLevel = "AAA", seed = ""): string {
+export function distinctColor(taken: string[], level: ContrastLevel = "AAA"): string {
+  const nearest = (c: string) => (taken.length ? Math.min(...taken.map((t) => colorDistance(c, t))) : Infinity);
+  for (const name of NAMED_ORDER) {
+    const hex = ensureContrast(PALETTE[name], level);
+    if (nearest(hex) > SAME_COLOR) return hex;
+  }
   if (!poolCache.has(level)) poolCache.set(level, candidates(level));
-  const pool = poolCache.get(level)!;
-  const named = new Set(Object.values(PALETTE));
-  let h = 0;
-  for (const c of seed) h = (h * 31 + c.charCodeAt(0)) >>> 0;
-  let best = pool[0];
+  let best = poolCache.get(level)![0];
   let bestScore = -Infinity;
-  pool.forEach((c, i) => {
-    const nearest = taken.length ? Math.min(...taken.map((t) => colorDistance(c, t))) : 1;
-    // Prefer named palette colors, keep gray for last, break ties stably by seed.
-    const bonus = c === PALETTE.gray ? -0.2 : named.has(c) ? 0.05 : 0;
-    const score = nearest + bonus + ((i + h) % pool.length) * 1e-6;
+  for (const c of poolCache.get(level)!) {
+    const score = nearest(c);
     if (score > bestScore) [best, bestScore] = [c, score];
-  });
+  }
   return best;
 }
 

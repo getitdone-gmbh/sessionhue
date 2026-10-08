@@ -88,9 +88,10 @@ export function suggestions(config: Config, limit = 50): Suggestion[] {
   const taken = config.presets.map((p) => p.color);
   const result: Suggestion[] = [];
   for (const u of usage()) {
-    if (findPreset(config, u.root)) continue;
+    // Only real repos: plain folders like ~/Documents are not worth a preset.
+    if (!fs.existsSync(path.join(u.root, ".git")) || findPreset(config, u.root)) continue;
     const name = path.basename(u.root);
-    const color = u.lastColor ?? distinctColor(taken, config.contrast, u.root);
+    const color = u.lastColor ?? distinctColor(taken, config.contrast);
     taken.push(color);
     result.push({ root: u.root, name, color, title: u.lastTitle ?? name, sessions: u.sessions });
     if (result.length >= limit) break;
@@ -104,5 +105,5 @@ export function suggestFor(config: Config, dir: string): Suggestion {
   const found = suggestions(config, 1000).find((s) => s.root === root);
   if (found) return found;
   const name = path.basename(root);
-  return { root, name, color: distinctColor(config.presets.map((p) => p.color), config.contrast, root), title: name, sessions: 0 };
+  return { root, name, color: distinctColor(config.presets.map((p) => p.color), config.contrast), title: name, sessions: 0 };
 }
