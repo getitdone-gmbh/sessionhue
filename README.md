@@ -2,6 +2,8 @@
 
 Give every terminal session its own color and title, so you can tell 10, 20 or 50 open sessions apart at a glance. Built for people who run many sessions in parallel, for example several Claude Code agents in different repos.
 
+![Six iTerm2 windows, each with its own colored title bar: checkout-api in blue, web-shop in orange, mobile-app in green, design-system in purple, infra in red, docs in teal](docs/sessions.png)
+
 > [!IMPORTANT]
 > **The colored title bar needs [iTerm2](https://iterm2.com) (free).** macOS Terminal.app cannot color its title bar or tabs, so there you only get a small colored dot in the tab title. `sessionhue setup` installs and configures iTerm2 for you, and your shell, prompt and plugins stay exactly as they are. [Why?](#which-terminal)
 
@@ -160,7 +162,7 @@ sessionhue colors
 
 Color is never the only signal: every session also has a text title.
 
-When a label is drawn on top of the color (iTerm2 title bar, kitty and WezTerm tabs), the color must reach the configured contrast against black or white text. The default is **AAA (7:1)**. Every palette color passes. Custom colors that don't are shifted to the closest passing shade, and sessionhue tells you about it.
+When a label is drawn on top of the color (iTerm2 title bar, kitty and WezTerm tabs), the color must reach the configured contrast against black or white text. In kitty and WezTerm sessionhue also sets that text color. iTerm2 picks the title color itself and dims the title of inactive windows, so there the active window gets the full contrast. The default is **AAA (7:1)**. Every palette color passes. Custom colors that don't are shifted to the closest passing shade, and sessionhue tells you about it.
 
 ```sh
 sessionhue check "#0090ff"
