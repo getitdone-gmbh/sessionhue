@@ -7,7 +7,7 @@ import * as p from "@clack/prompts";
 import { MIN_RATIO, PALETTE, checkContrast, colorName, ensureContrast, resolveColor, swatch } from "./colors.js";
 import { type Config, type Preset, configPath, findPreset, loadConfig, projectRoot, saveConfig, upsertPreset } from "./config.js";
 import { suggestFor, suggestions, recordUse } from "./history.js";
-import { type Look, applyLook, detectTerminal, findTty, resetLook } from "./terminal.js";
+import { type Look, TITLES_DIR, applyLook, detectTerminal, findTty, resetLook } from "./terminal.js";
 
 const HELP = `sessionhue · terminal session colors
 
@@ -217,17 +217,27 @@ async function cmdPick(config: Config): Promise<void> {
 
 function cmdInit(): void {
   const shell = rest[0] ?? path.basename(process.env.SHELL ?? "zsh");
-  const fn = `_sessionhue_cd() {
+  const titles = TITLES_DIR.replace(os.homedir(), "$HOME");
+  // On cd: apply the repo preset. On every prompt: re-send our title, since
+  // shells and frameworks (oh-my-zsh, starship) overwrite it.
+  const fns = `_sessionhue_cd() {
   local root
   root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
   [ "$root" = "$_SESSIONHUE_ROOT" ] && return
   _SESSIONHUE_ROOT=$root
   (sessionhue apply --quiet >/dev/null 2>&1 &)
+}
+_sessionhue_title() {
+  local f="${titles}/\${_SESSIONHUE_TTY##*/}"
+  [ -r "$f" ] || return
+  local t
+  t=$(<"$f")
+  printf '\\033]1;%s\\007\\033]2;%s\\007' "$t" "$t"
 }`;
   if (shell === "zsh") {
-    console.log(`${fn}\nautoload -Uz add-zsh-hook\nadd-zsh-hook chpwd _sessionhue_cd\n_sessionhue_cd`);
+    console.log(`_SESSIONHUE_TTY=$TTY\n${fns}\nautoload -Uz add-zsh-hook\nadd-zsh-hook chpwd _sessionhue_cd\nadd-zsh-hook precmd _sessionhue_title\n_sessionhue_cd`);
   } else if (shell === "bash") {
-    console.log(`${fn}\nPROMPT_COMMAND="_sessionhue_cd\${PROMPT_COMMAND:+;$PROMPT_COMMAND}"`);
+    console.log(`_SESSIONHUE_TTY=$(tty)\n${fns}\nPROMPT_COMMAND="_sessionhue_cd;_sessionhue_title\${PROMPT_COMMAND:+;$PROMPT_COMMAND}"`);
   } else {
     fail(`unsupported shell "${shell}" (zsh, bash)`);
   }

@@ -1,6 +1,8 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
+import path from "node:path";
 import { dotFor, parseHex, textColorFor } from "./colors.js";
+import { CONFIG_DIR } from "./config.js";
 
 /**
  * How the color is shown. Never as a background behind console output:
@@ -66,11 +68,28 @@ function appleTab(tty: string, body: string): void {
 end tell`);
 }
 
+/**
+ * Last label per tty. The shell hook re-sends it after every prompt, because
+ * shells (oh-my-zsh, starship, ...) reset the title on each prompt.
+ */
+export const TITLES_DIR = path.join(CONFIG_DIR, "titles");
+
+function rememberTitle(tty: string, label: string | null): void {
+  const file = path.join(TITLES_DIR, path.basename(tty));
+  if (label) {
+    fs.mkdirSync(TITLES_DIR, { recursive: true });
+    fs.writeFileSync(file, label);
+  } else {
+    fs.rmSync(file, { force: true });
+  }
+}
+
 const osc = (s: string) => `\x1b]${s}\x07`;
 const b64 = (s: string) => Buffer.from(s).toString("base64");
 
 export function applyLook(look: Look, tty: string, kind = detectTerminal()): void {
   const label = tabLabel(look, kind);
+  rememberTitle(tty, label || null);
 
   if (kind === "apple") {
     // Terminal.app can't color tabs; the dot lives in the tab title only.
@@ -99,6 +118,7 @@ export function applyLook(look: Look, tty: string, kind = detectTerminal()): voi
 }
 
 export function resetLook(tty: string, kind = detectTerminal()): void {
+  rememberTitle(tty, null);
   if (kind === "apple") return appleTab(tty, "set title displays custom title of t to false");
   let seq = osc("1;") + osc("2;");
   if (kind === "iterm") seq += osc("6;1;bg;*;default");

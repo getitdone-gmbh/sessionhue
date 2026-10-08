@@ -42,7 +42,7 @@ A preset matches a folder and everything inside it. The most specific match wins
 
 ### Automatic coloring
 
-Shell hook, colors the tab when you `cd` into a repo with a preset:
+Shell hook, colors the tab when you `cd` into a repo with a preset, and keeps your title when the shell (oh-my-zsh, starship, ...) resets it on every prompt:
 
 ```sh
 # ~/.zshrc
@@ -87,6 +87,12 @@ sessionhue colors                             # palette with ratings
 | Terminal.app, Ghostty, others | Colored dot in the tab title, e.g. `🔵 api` |
 
 Terminal.app and Ghostty cannot color tabs, so the closest of nine colored dots is used there.
+
+**Best visibility: iTerm2 with the Minimal theme** (Settings → Appearance → Theme → Minimal). The tab color then fills the whole title bar of the window, readable from across the room, and it is drawn by iTerm2 itself: no overlay, nothing behind your text.
+
+```sh
+defaults write com.googlecode.iterm2 TabStyleWithAutomaticOption -int 5   # Minimal theme
+```
 
 ### WezTerm snippet
 
