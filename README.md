@@ -51,6 +51,21 @@ sessionhue claude --write
 defaults write com.googlecode.iterm2 TabStyleWithAutomaticOption -int 5   # iTerm2 > Settings > Appearance > Theme > Minimal
 ```
 
+### Your shell stays yours
+
+sessionhue only sets the tab color and title. Your shell, prompt theme and plugins (oh-my-zsh, starship, powerlevel10k, ...) and your terminal profile stay exactly as they are.
+
+### Optional: readable light profile for iTerm2
+
+iTerm2's default colors put light cyan and magenta on a white background, which is hard to read. If you want a light profile where every text color reaches AAA contrast (7:1), install the optional extra:
+
+```sh
+sessionhue profile iterm            # adds "sessionhue Light AAA" to iTerm2 profiles
+sessionhue profile iterm --default  # and makes it the default (restart iTerm2 once)
+```
+
+It only changes colors, font (SF Mono 13) and margins. Nothing in your shell setup.
+
 ## Usage
 
 ```sh

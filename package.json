@@ -7,7 +7,7 @@
     "sessionhue": "dist/cli.js",
     "shue": "dist/cli.js"
   },
-  "files": ["dist", "!dist/*.test.js", "README.md", "LICENSE"],
+  "files": ["dist", "!dist/*.test.js", "extras", "README.md", "LICENSE"],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",

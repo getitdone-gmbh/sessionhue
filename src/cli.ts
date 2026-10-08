@@ -1,7 +1,9 @@
 #!/usr/bin/env node
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import * as p from "@clack/prompts";
 import { MIN_RATIO, PALETTE, checkContrast, colorName, ensureContrast, resolveColor, swatch } from "./colors.js";
@@ -23,6 +25,7 @@ Usage
   sessionhue colors                  show the palette with contrast ratings
   sessionhue check <color>           WCAG contrast check (label on indicator)
   sessionhue init <zsh|bash>         shell hook: auto-apply presets on cd
+  sessionhue profile iterm [--default]  optional: readable light iTerm2 profile (AAA text colors)
   sessionhue claude [--write]        Claude Code hook: auto-apply on session start
   sessionhue config                  show config file path
 
@@ -42,6 +45,7 @@ const { values: opts, positionals } = parseArgs({
     save: { type: "boolean", short: "s" },
     quiet: { type: "boolean", short: "q" },
     write: { type: "boolean" },
+    default: { type: "boolean" },
     tty: { type: "string" },
     limit: { type: "string", short: "n" },
     text: { type: "string" },
@@ -277,6 +281,24 @@ function rating(ratio: number): string {
   return ratio >= MIN_RATIO.AAA ? "AAA" : ratio >= MIN_RATIO.AA ? "AA " : "fail";
 }
 
+const ITERM_PROFILE_GUID = "5E5510E0-4A3E-4C2B-9A11-AAA000000001";
+
+/** Optional extra: installs a light iTerm2 profile whose text colors all reach AAA. Never touches shell or prompt. */
+function cmdProfile(): void {
+  if (rest[0] !== "iterm") fail('usage: sessionhue profile iterm [--default]');
+  const src = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "extras", "iterm2-light-aaa.json");
+  const dir = path.join(os.homedir(), "Library", "Application Support", "iTerm2", "DynamicProfiles");
+  fs.mkdirSync(dir, { recursive: true });
+  fs.copyFileSync(src, path.join(dir, "sessionhue-light-aaa.json"));
+  console.log(`installed iTerm2 profile "sessionhue Light AAA" (${dir})`);
+  if (opts.default) {
+    execFileSync("defaults", ["write", "com.googlecode.iterm2", "Default Bookmark Guid", "-string", ITERM_PROFILE_GUID]);
+    console.log("set as default profile for new iTerm2 windows (restart iTerm2 once to apply)");
+  } else {
+    console.log("pick it in iTerm2 > Settings > Profiles, or rerun with --default");
+  }
+}
+
 function cmdColors(): void {
   for (const [name, hex] of Object.entries(PALETTE)) {
     const c = checkContrast(hex);
@@ -320,6 +342,8 @@ async function main(): Promise<void> {
       return cmdSuggest(config);
     case "colors":
       return cmdColors();
+    case "profile":
+      return cmdProfile();
     case "check":
       return cmdCheck(config);
     case "init":
