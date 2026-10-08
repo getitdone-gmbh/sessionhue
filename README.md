@@ -11,38 +11,54 @@ Give every terminal session its own color and title, so you can tell 10, 20 or 5
 
 ## Install
 
-Requires Node.js 18 or newer and macOS (Linux works for kitty, WezTerm and generic terminals).
+Pick one. All three end in the same guided setup, where every step is optional.
 
-From the latest release:
+### One command
 
-```sh
-npm install -g https://github.com/getitdone-gmbh/sessionhue/releases/download/v0.1.0/sessionhue-0.1.0.tgz
-```
-
-Or build it yourself, see [Development](#development).
-
-Check it works:
+Paste this into Terminal:
 
 ```sh
-sessionhue --help
+/bin/bash -c "$(curl -fsSL https://github.com/getitdone-gmbh/sessionhue/releases/latest/download/install.sh)"
 ```
 
-`shue` is installed as a short alias for `sessionhue`.
+### Double-click
+
+1. Download [Install-sessionhue.zip](https://github.com/getitdone-gmbh/sessionhue/releases/latest/download/Install-sessionhue.zip) and double-click it to unzip.
+2. Double-click **Install sessionhue.command**.
+3. The first time, macOS says it cannot verify the developer, because the installer is not notarized by Apple. Open **System Settings > Privacy & Security**, scroll down and click **Open Anyway** next to "Install sessionhue.command". Or right-click the file and choose **Open**.
+
+### npm
+
+```sh
+npm install -g https://github.com/getitdone-gmbh/sessionhue/releases/latest/download/sessionhue.tgz
+sessionhue setup
+```
+
+The installer needs Node.js 18 or newer. If it is missing and Homebrew is installed, it installs Node.js for you. sessionhue runs on macOS; Linux works for kitty, WezTerm and generic terminals.
+
+### What `sessionhue setup` asks
+
+On macOS:
+
+- Install iTerm2 with Homebrew, if it is missing (needed for the colored title bar, see [Which terminal?](#which-terminal))
+- Use the iTerm2 Minimal theme, so the color fills the whole title bar
+- Install a readable light iTerm2 profile where all text colors reach AAA (off by default)
+- Add a **Terminal iTerm** launcher: keep typing cmd+space "terminal" and get iTerm2
+
+Everywhere:
+
+- Color tabs automatically when you `cd` into a repo (one line in `~/.zshrc` or `~/.bashrc`)
+- Color Claude Code sessions automatically (off by default)
+- Create presets for the repos you worked in
+
+iTerm2 overwrites its settings when it quits, so setup asks to quit iTerm2 before changing them. Run setup from Terminal.app for the smoothest first run. You can run `sessionhue setup` again at any time.
 
 ## Quick start
 
 ```sh
-# 1. Color the current tab
-sessionhue blue api
-
-# 2. Turn the repos you work in into presets (pick them from a list)
-sessionhue suggest --save
-
-# 3. Apply presets automatically whenever you cd into a repo
-echo 'eval "$(sessionhue init zsh)"' >> ~/.zshrc
-
-# 4. Optional: color Claude Code sessions on start
-sessionhue claude --write
+sessionhue blue api        # color this tab blue, title "api"
+sessionhue                 # or pick a color from a menu
+sessionhue suggest --save  # presets for the repos you work in
 ```
 
 ## Which terminal?
@@ -56,13 +72,14 @@ sessionhue claude --write
 
 Switching from Terminal.app to iTerm2 keeps everything you have: the same zsh, prompt theme, plugins, aliases and Claude Code. Only the window around it changes.
 
+`sessionhue setup` does the switch for you: it installs iTerm2, turns on the Minimal theme and adds the **Terminal iTerm** launcher, so cmd+space "terminal" keeps working. In Spotlight, pick "Terminal iTerm" once; after that it stays on top.
+
+By hand:
+
 1. Install iTerm2 (free): `brew install --cask iterm2` or [iterm2.com](https://iterm2.com)
-2. Use the Minimal theme, so the color fills the whole title bar:
-   ```sh
-   defaults write com.googlecode.iterm2 TabStyleWithAutomaticOption -int 5   # or iTerm2 > Settings > Appearance > Theme > Minimal
-   ```
-3. Optional: make it your default terminal with **iTerm2 > Make iTerm2 Default Term**, and put iTerm2 in the Dock instead of Terminal.
-4. Optional: a readable light color profile, see [below](#optional-readable-light-profile-for-iterm2).
+2. Use the Minimal theme (iTerm2 > Settings > Appearance > Theme > Minimal), so the color fills the whole title bar
+3. Optional: `sessionhue launcher` for the Spotlight launcher, and **iTerm2 > Make iTerm2 Default Term**
+4. Optional: a readable light color profile, see [below](#optional-readable-light-profile-for-iterm2)
 
 sessionhue detects the terminal on its own. You can keep using both side by side: iTerm2 shows the bar, Terminal.app the dot.
 
@@ -76,10 +93,10 @@ iTerm2's default colors put light cyan and magenta on a white background, which 
 
 ```sh
 sessionhue profile iterm            # adds "sessionhue Light AAA" to iTerm2 profiles
-sessionhue profile iterm --default  # and makes it the default (restart iTerm2 once)
+sessionhue profile iterm --default  # and makes it the default (run with iTerm2 closed)
 ```
 
-Windows that are already open keep their old profile. Open a new one with **Profiles > sessionhue Light AAA**, or restart iTerm2 once. If new windows still use the old profile after the restart, set it in **iTerm2 > Settings > Profiles > sessionhue Light AAA > Other Actions > Set as Default**.
+iTerm2 overwrites its settings when it quits, so `--default` only works while iTerm2 is closed: run it from Terminal.app, or let `sessionhue setup` quit iTerm2 for you. Windows that are already open keep their old profile; open a new one with **Profiles > sessionhue Light AAA**. You can also set it by hand in **iTerm2 > Settings > Profiles > sessionhue Light AAA > Other Actions > Set as Default**.
 
 It only changes colors, font (SF Mono 13) and margins. Nothing in your shell setup.
 
@@ -203,11 +220,13 @@ end)
 ## Uninstall
 
 ```sh
+sessionhue launcher remove
+rm -f ~/Library/Application\ Support/iTerm2/DynamicProfiles/sessionhue-light-aaa.json
 npm uninstall -g sessionhue
 rm -rf ~/.config/sessionhue
 ```
 
-Then remove the `eval "$(sessionhue init zsh)"` line from your shell config and the `sessionhue apply` hooks from `~/.claude/settings.json`, if you added them.
+Then remove the `eval "$(sessionhue init zsh)"` line from your shell config and the `sessionhue apply` hooks from `~/.claude/settings.json`, if you added them. iTerm2 itself stays installed.
 
 ## Development
 
@@ -218,6 +237,7 @@ npm install
 npm run build
 npm test
 npm link        # use your local build as the global `sessionhue`
+./scripts/build-release.sh   # release assets into ./release
 ```
 
 ## License

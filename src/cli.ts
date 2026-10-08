@@ -1,19 +1,19 @@
 #!/usr/bin/env node
-import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import * as p from "@clack/prompts";
 import { MIN_RATIO, PALETTE, checkContrast, colorName, ensureContrast, resolveColor, swatch } from "./colors.js";
 import { type Config, type Preset, configPath, findPreset, loadConfig, projectRoot, saveConfig, upsertPreset } from "./config.js";
 import { suggestFor, suggestions, recordUse } from "./history.js";
+import { brewAvailable, installIterm, installLauncher, installProfile, installShellHook, isMac, itermInstalled, itermRunning, quitIterm, removeLauncher, setMinimalTheme } from "./setup.js";
 import { type Look, TITLES_DIR, applyLook, detectTerminal, findTty, resetLook } from "./terminal.js";
 
 const HELP = `sessionhue · terminal session colors
 
 Usage
+  sessionhue setup                   guided first-run setup (run this after installing)
   sessionhue                         pick a color interactively (with suggestions)
   sessionhue set <color> [title]     color this tab, e.g. "set blue api" or "set #ff8800"
   sessionhue apply                   apply the preset for the current folder
@@ -26,6 +26,7 @@ Usage
   sessionhue check <color>           WCAG contrast check (label on indicator)
   sessionhue init <zsh|bash>         shell hook: auto-apply presets on cd
   sessionhue profile iterm [--default]  optional: readable light iTerm2 profile (AAA text colors)
+  sessionhue launcher [remove]       Spotlight "Terminal iTerm" launcher (macOS)
   sessionhue claude [--write]        Claude Code hook: auto-apply on session start
   sessionhue config                  show config file path
 
@@ -281,22 +282,80 @@ function rating(ratio: number): string {
   return ratio >= MIN_RATIO.AAA ? "AAA" : ratio >= MIN_RATIO.AA ? "AA " : "fail";
 }
 
-const ITERM_PROFILE_GUID = "5E5510E0-4A3E-4C2B-9A11-AAA000000001";
-
 /** Optional extra: installs a light iTerm2 profile whose text colors all reach AAA. Never touches shell or prompt. */
 function cmdProfile(): void {
-  if (rest[0] !== "iterm") fail('usage: sessionhue profile iterm [--default]');
-  const src = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "extras", "iterm2-light-aaa.json");
-  const dir = path.join(os.homedir(), "Library", "Application Support", "iTerm2", "DynamicProfiles");
-  fs.mkdirSync(dir, { recursive: true });
-  fs.copyFileSync(src, path.join(dir, "sessionhue-light-aaa.json"));
+  if (rest[0] !== "iterm") fail("usage: sessionhue profile iterm [--default]");
+  if (opts.default && itermRunning()) fail("quit iTerm2 first (it overwrites its settings on quit), then run this again from Terminal.app");
+  const dir = installProfile(Boolean(opts.default));
   console.log(`installed iTerm2 profile "sessionhue Light AAA" (${dir})`);
-  if (opts.default) {
-    execFileSync("defaults", ["write", "com.googlecode.iterm2", "Default Bookmark Guid", "-string", ITERM_PROFILE_GUID]);
-    console.log("set as default profile for new iTerm2 windows (restart iTerm2 once to apply)");
-  } else {
-    console.log("pick it in iTerm2 > Settings > Profiles, or rerun with --default");
+  console.log(opts.default ? "set as default profile for new iTerm2 windows" : "pick it in iTerm2 > Settings > Profiles, or rerun with --default");
+}
+
+function cmdLauncher(): void {
+  if (rest[0] === "remove") {
+    removeLauncher();
+    return console.log("removed the Terminal iTerm launcher");
   }
+  if (!itermInstalled()) fail("iTerm2 is not installed");
+  console.log(`installed ${installLauncher()}: type "terminal" in Spotlight and pick "Terminal iTerm"`);
+}
+
+/** Guided first-run: every step is optional and asked for. */
+async function cmdSetup(config: Config): Promise<void> {
+  p.intro("sessionhue setup");
+  const yes = async (message: string, initialValue = true) => {
+    const answer = await p.confirm({ message, initialValue });
+    if (p.isCancel(answer)) {
+      p.cancel("setup cancelled, nothing else changed");
+      process.exit(0);
+    }
+    return answer;
+  };
+
+  if (isMac()) {
+    p.note(
+      "Terminal.app cannot color its title bar, it only gets a colored dot.\nThe colored title bar needs iTerm2 (free). Your shell, prompt and plugins stay the same.",
+      "Terminal",
+    );
+    if (!itermInstalled()) {
+      if (brewAvailable() && (await yes("Install iTerm2 with Homebrew?"))) installIterm();
+      else if (!itermInstalled()) p.log.info("Get iTerm2 from https://iterm2.com and run `sessionhue setup` again for the iTerm2 steps.");
+    }
+    if (itermInstalled()) {
+      const theme = await yes("Use the iTerm2 Minimal theme, so the color fills the whole title bar?");
+      const profile = await yes("Install the readable light profile (all text colors AAA) and make it the default?", false);
+      if ((theme || profile) && itermRunning()) {
+        // Quitting iTerm2 from inside iTerm2 would end this very setup.
+        if (detectTerminal() === "iterm") p.log.warn("iTerm2 overwrites these settings when it quits. Quit iTerm2, then run `sessionhue setup` again from Terminal.app.");
+        else if (await yes("iTerm2 is running and would undo these settings when it quits. Quit iTerm2 now?")) quitIterm();
+        else p.log.warn("Skipped: quit iTerm2 and run `sessionhue setup` again to apply them.");
+      }
+      if (!itermRunning()) {
+        if (theme) setMinimalTheme();
+        if (profile) installProfile(true);
+        if (theme || profile) p.log.success("iTerm2 settings applied");
+      }
+      if (await yes('Add a "Terminal iTerm" launcher, so cmd+space "terminal" opens iTerm2?')) {
+        installLauncher();
+        p.log.success('Spotlight: type "terminal" and pick "Terminal iTerm" once, then it stays on top');
+      }
+    }
+  }
+
+  const shell = path.basename(process.env.SHELL ?? "zsh") === "bash" ? "bash" : "zsh";
+  if (await yes(`Color tabs automatically when you cd into a repo (adds one line to ~/.${shell}rc)?`)) {
+    p.log.success(`added the hook to ${installShellHook(shell)}`);
+  }
+  if (await yes("Color Claude Code sessions automatically (adds hooks to ~/.claude/settings.json)?", false)) {
+    opts.write = true;
+    cmdClaude();
+  }
+  const list = suggestions(config);
+  if (list.length && (await yes(`Create presets for ${list.length} repos you worked in?`))) {
+    opts.save = true;
+    await cmdSuggest(config);
+  }
+  p.outro("done. Open a new terminal window and run `sessionhue` to color it.");
 }
 
 function cmdColors(): void {
@@ -344,6 +403,10 @@ async function main(): Promise<void> {
       return cmdColors();
     case "profile":
       return cmdProfile();
+    case "setup":
+      return cmdSetup(config);
+    case "launcher":
+      return cmdLauncher();
     case "check":
       return cmdCheck(config);
     case "init":
