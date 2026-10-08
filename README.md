@@ -2,6 +2,9 @@
 
 Give every terminal session its own color and title, so you can tell 10, 20 or 50 open sessions apart at a glance. Built for people who run many sessions in parallel, for example several Claude Code agents in different repos.
 
+> [!IMPORTANT]
+> **The colored title bar needs [iTerm2](https://iterm2.com) (free).** macOS Terminal.app cannot color its title bar or tabs, so there you only get a small colored dot in the tab title. `sessionhue setup` installs and configures iTerm2 for you, and your shell, prompt and plugins stay exactly as they are. [Why?](#which-terminal)
+
 - **Color without touching your output.** The color lives in the tab or title bar, never as a background behind console text.
 - **Accessible by default.** Wherever a label sits on the color, sessionhue keeps WCAG AAA contrast (7:1) and adjusts colors that fall short. A built-in checker shows the numbers.
 - **Any color, fast.** Pick from a palette in an interactive menu, or use any `#hex`.
@@ -43,7 +46,7 @@ On macOS:
 - Install iTerm2 with Homebrew, if it is missing (needed for the colored title bar, see [Which terminal?](#which-terminal))
 - Use the iTerm2 Minimal theme, so the color fills the whole title bar
 - Install a readable light iTerm2 profile where all text colors reach AAA (off by default)
-- Add a **Terminal iTerm** launcher: keep typing cmd+space "terminal" and get iTerm2
+- Add a **Terminal iTerm** launcher: keep typing "terminal" in Spotlight, Alfred or Raycast and get iTerm2
 
 Everywhere:
 
@@ -72,13 +75,13 @@ sessionhue suggest --save  # presets for the repos you work in
 
 Switching from Terminal.app to iTerm2 keeps everything you have: the same zsh, prompt theme, plugins, aliases and Claude Code. Only the window around it changes.
 
-`sessionhue setup` does the switch for you: it installs iTerm2, turns on the Minimal theme and adds the **Terminal iTerm** launcher, so cmd+space "terminal" keeps working. In Spotlight, pick "Terminal iTerm" once; after that it stays on top.
+`sessionhue setup` does the switch for you: it installs iTerm2, turns on the Minimal theme and adds the **Terminal iTerm** launcher to /Applications, so typing "terminal" in Spotlight, Alfred or Raycast keeps working. Pick "Terminal iTerm" once; after that it stays on top. If it does not show up, the Spotlight index has not caught up yet: wait a moment, or type `reload` in Alfred.
 
 By hand:
 
 1. Install iTerm2 (free): `brew install --cask iterm2` or [iterm2.com](https://iterm2.com)
 2. Use the Minimal theme (iTerm2 > Settings > Appearance > Theme > Minimal), so the color fills the whole title bar
-3. Optional: `sessionhue launcher` for the Spotlight launcher, and **iTerm2 > Make iTerm2 Default Term**
+3. Optional: `sessionhue launcher` for the "Terminal iTerm" launcher, and **iTerm2 > Make iTerm2 Default Term**
 4. Optional: a readable light color profile, see [below](#optional-readable-light-profile-for-iterm2)
 
 sessionhue detects the terminal on its own. You can keep using both side by side: iTerm2 shows the bar, Terminal.app the dot.
