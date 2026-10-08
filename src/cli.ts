@@ -8,7 +8,7 @@ import { MIN_RATIO, PALETTE, checkContrast, colorName, ensureContrast, resolveCo
 import { type Config, type Preset, configPath, findPreset, loadConfig, projectRoot, saveConfig, upsertPreset } from "./config.js";
 import { suggestFor, suggestions, recordUse } from "./history.js";
 import { brewAvailable, installIterm, installLauncher, installProfile, installShellHook, isMac, itermInstalled, itermRunning, quitIterm, removeLauncher, setMinimalTheme } from "./setup.js";
-import { type Look, TITLES_DIR, applyLook, detectTerminal, findTty, resetLook } from "./terminal.js";
+import { type Look, TITLES_DIR, applyLook, detectTerminal, findTty, rememberColor, resetLook, sessionColor } from "./terminal.js";
 
 const HELP = `sessionhue · terminal session colors
 
@@ -16,7 +16,7 @@ Usage
   sessionhue setup                   guided first-run setup (run this after installing)
   sessionhue                         pick a color interactively (with suggestions)
   sessionhue set <color> [title]     color this tab, e.g. "set blue api" or "set #ff8800"
-  sessionhue apply                   apply the preset for the current folder
+  sessionhue apply                   apply the preset for the current folder (or a color of its own)
   sessionhue reset                   back to the default look
   sessionhue suggest [--save] [-n N] presets for repos you worked in (incl. Claude Code history)
   sessionhue preset list
@@ -84,7 +84,10 @@ function accessibleColor(input: string, config: Config): string {
 function paint(look: Look, config: Config): void {
   // Presets saved before a stricter contrast setting are lifted on the fly.
   const color = ensureContrast(look.color, config.contrast);
-  applyLook({ ...look, color }, tty());
+  const t = tty();
+  applyLook({ ...look, color }, t);
+  // The session keeps this color when it later leaves the folder (or Claude Code's Stop hook re-applies).
+  rememberColor(t, color);
   recordUse(cwd, color, look.title);
 }
 
@@ -113,6 +116,11 @@ function cmdApply(config: Config): void {
   if (config.autoColorUnknownRepos) {
     const s = suggestFor(config, cwd);
     return applyLook({ color: ensureContrast(s.color, config.contrast), title: s.title }, tty());
+  }
+  if (config.autoColorSessions) {
+    // No title: the tab keeps the name the shell or Claude Code gives it.
+    const t = tty();
+    return applyLook({ color: sessionColor(t, config.presets.map((pr) => pr.color), config.contrast) }, t);
   }
   if (!opts.quiet) console.log("no preset for this folder (try: sessionhue suggest)");
 }

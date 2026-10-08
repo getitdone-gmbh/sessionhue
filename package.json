@@ -1,13 +1,20 @@
 {
   "name": "sessionhue",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Terminal session colors: give every terminal tab its own color and title, with presets and auto-suggestions per repo. Works with Terminal.app, iTerm2, Ghostty, WezTerm, kitty and Claude Code.",
   "type": "module",
   "bin": {
     "sessionhue": "dist/cli.js",
     "shue": "dist/cli.js"
   },
-  "files": ["dist", "!dist/*.test.js", "extras", "install.sh", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "!dist/*.test.js",
+    "extras",
+    "install.sh",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
@@ -32,8 +39,13 @@
   ],
   "author": "Alexander Friedl",
   "license": "0BSD",
-  "engines": { "node": ">=18" },
-  "repository": { "type": "git", "url": "git+https://github.com/getitdone-gmbh/sessionhue.git" },
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/getitdone-gmbh/sessionhue.git"
+  },
   "dependencies": {
     "@clack/prompts": "^0.11.0"
   },

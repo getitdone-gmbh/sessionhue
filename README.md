@@ -213,6 +213,7 @@ end)
 {
   "contrast": "AAA",
   "autoColorUnknownRepos": false,
+  "autoColorSessions": true,
   "presets": [
     { "name": "api", "color": "#0bd8b6", "title": "API", "match": ["/Users/me/code/api"] }
   ]
@@ -221,6 +222,7 @@ end)
 
 - `contrast`: `"AAA"` (7:1), `"AA"` (4.5:1) or `"off"`.
 - `autoColorUnknownRepos`: on `apply`, give repos without a preset their suggested color.
+- `autoColorSessions`: on `apply`, give every session without a preset a color of its own that no other open session uses, e.g. when you always start in your home folder. The tab keeps its title, and the session keeps its color until it is closed.
 
 ## Uninstall
 

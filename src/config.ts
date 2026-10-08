@@ -17,12 +17,15 @@ export type Config = {
   contrast: ContrastLevel;
   /** Color repos without a preset with a stable suggested color on `apply`. */
   autoColorUnknownRepos: boolean;
+  /** Give every other session its own color on `apply`, distinct from all open sessions. */
+  autoColorSessions: boolean;
 };
 
 const DEFAULTS: Config = {
   presets: [],
   contrast: "AAA",
   autoColorUnknownRepos: false,
+  autoColorSessions: true,
 };
 
 export const CONFIG_DIR = process.env.SESSIONHUE_HOME ?? path.join(os.homedir(), ".config", "sessionhue");

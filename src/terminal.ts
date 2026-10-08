@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { dotFor, parseHex, textColorFor } from "./colors.js";
+import { type ContrastLevel, distinctColor, dotFor, parseHex, textColorFor } from "./colors.js";
 import { CONFIG_DIR } from "./config.js";
 
 /**
@@ -84,6 +84,51 @@ function rememberTitle(tty: string, label: string | null): void {
   }
 }
 
+/**
+ * Color per tty. A session keeps its color while it is open, and sessions
+ * without a preset get one that no other open session uses.
+ */
+const COLORS_DIR = path.join(CONFIG_DIR, "sessions");
+
+export function rememberColor(tty: string, color: string | null): void {
+  const file = path.join(COLORS_DIR, path.basename(tty));
+  if (color) {
+    fs.mkdirSync(COLORS_DIR, { recursive: true });
+    fs.writeFileSync(file, color);
+  } else {
+    fs.rmSync(file, { force: true });
+  }
+}
+
+/** ttys that still have a process attached, e.g. "ttys004". */
+function openTtys(): Set<string> {
+  try {
+    return new Set(execFileSync("ps", ["-A", "-o", "tty="], { encoding: "utf8" }).split(/\s+/).filter((t) => t && t !== "??"));
+  } catch {
+    return new Set();
+  }
+}
+
+/** This session's color, or a new one far from every open session and from `avoid`. */
+export function sessionColor(tty: string, avoid: string[], level: ContrastLevel): string {
+  const own = path.basename(tty);
+  let entries: string[] = [];
+  try {
+    entries = fs.readdirSync(COLORS_DIR);
+  } catch {}
+  const open = openTtys();
+  const taken = [...avoid];
+  for (const name of entries) {
+    const file = path.join(COLORS_DIR, name);
+    if (name === own) return fs.readFileSync(file, "utf8").trim();
+    if (!open.has(name)) fs.rmSync(file, { force: true });
+    else taken.push(fs.readFileSync(file, "utf8").trim());
+  }
+  const color = distinctColor(taken, level);
+  rememberColor(tty, color);
+  return color;
+}
+
 const osc = (s: string) => `\x1b]${s}\x07`;
 const b64 = (s: string) => Buffer.from(s).toString("base64");
 
@@ -119,6 +164,7 @@ export function applyLook(look: Look, tty: string, kind = detectTerminal()): voi
 
 export function resetLook(tty: string, kind = detectTerminal()): void {
   rememberTitle(tty, null);
+  rememberColor(tty, null);
   if (kind === "apple") return appleTab(tty, "set title displays custom title of t to false");
   let seq = osc("1;") + osc("2;");
   if (kind === "iterm") seq += osc("6;1;bg;*;default");
