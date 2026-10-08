@@ -1,6 +1,6 @@
 {
   "name": "sessionhue",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Terminal session colors: give every terminal tab its own color and title, with presets and auto-suggestions per repo. Works with Terminal.app, iTerm2, Ghostty, WezTerm, kitty and Claude Code.",
   "type": "module",
   "bin": {
