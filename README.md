@@ -19,11 +19,7 @@ From the latest release:
 npm install -g https://github.com/getitdone-gmbh/sessionhue/releases/download/v0.1.0/sessionhue-0.1.0.tgz
 ```
 
-Or straight from the repository:
-
-```sh
-npm install -g github:getitdone-gmbh/sessionhue
-```
+Or build it yourself, see [Development](#development).
 
 Check it works:
 
