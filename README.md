@@ -45,11 +45,26 @@ echo 'eval "$(sessionhue init zsh)"' >> ~/.zshrc
 sessionhue claude --write
 ```
 
-**For the most visible result, use iTerm2 with the Minimal theme.** The session color then fills the whole title bar of the window, readable from across the room. It is drawn by iTerm2 itself: no overlay, nothing behind your text.
+## Which terminal?
 
-```sh
-defaults write com.googlecode.iterm2 TabStyleWithAutomaticOption -int 5   # iTerm2 > Settings > Appearance > Theme > Minimal
-```
+**The colored title bar needs iTerm2.** macOS Terminal.app cannot color its title bar or tabs, so there sessionhue can only put a colored dot in the tab title (`🔵 api`). That is a hard limit of Terminal.app; sessionhue deliberately does not draw overlays on top of other apps.
+
+| You use | What you get |
+| --- | --- |
+| iTerm2 (Minimal theme) | The whole title bar in the session color, with the title on it. Readable from across the room. |
+| Terminal.app | A colored dot in front of the tab title. |
+
+Switching from Terminal.app to iTerm2 keeps everything you have: the same zsh, prompt theme, plugins, aliases and Claude Code. Only the window around it changes.
+
+1. Install iTerm2 (free): `brew install --cask iterm2` or [iterm2.com](https://iterm2.com)
+2. Use the Minimal theme, so the color fills the whole title bar:
+   ```sh
+   defaults write com.googlecode.iterm2 TabStyleWithAutomaticOption -int 5   # or iTerm2 > Settings > Appearance > Theme > Minimal
+   ```
+3. Optional: make it your default terminal with **iTerm2 > Make iTerm2 Default Term**, and put iTerm2 in the Dock instead of Terminal.
+4. Optional: a readable light color profile, see [below](#optional-readable-light-profile-for-iterm2).
+
+sessionhue detects the terminal on its own. You can keep using both side by side: iTerm2 shows the bar, Terminal.app the dot.
 
 ### Your shell stays yours
 
@@ -63,6 +78,8 @@ iTerm2's default colors put light cyan and magenta on a white background, which 
 sessionhue profile iterm            # adds "sessionhue Light AAA" to iTerm2 profiles
 sessionhue profile iterm --default  # and makes it the default (restart iTerm2 once)
 ```
+
+Windows that are already open keep their old profile. Open a new one with **Profiles > sessionhue Light AAA**, or restart iTerm2 once. If new windows still use the old profile after the restart, set it in **iTerm2 > Settings > Profiles > sessionhue Light AAA > Other Actions > Set as Default**.
 
 It only changes colors, font (SF Mono 13) and margins. Nothing in your shell setup.
 
