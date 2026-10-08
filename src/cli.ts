@@ -297,7 +297,7 @@ function cmdLauncher(): void {
     return console.log("removed the Terminal iTerm launcher");
   }
   if (!itermInstalled()) fail("iTerm2 is not installed");
-  console.log(`installed ${installLauncher()}: type "terminal" in Spotlight and pick "Terminal iTerm"`);
+  console.log(`installed ${installLauncher()}: type "terminal" in Spotlight or Alfred and pick "Terminal iTerm"`);
 }
 
 /** Guided first-run: every step is optional and asked for. */
@@ -335,9 +335,9 @@ async function cmdSetup(config: Config): Promise<void> {
         if (profile) installProfile(true);
         if (theme || profile) p.log.success("iTerm2 settings applied");
       }
-      if (await yes('Add a "Terminal iTerm" launcher, so cmd+space "terminal" opens iTerm2?')) {
+      if (await yes('Add a "Terminal iTerm" launcher, so typing "terminal" in Spotlight or Alfred opens iTerm2?')) {
         installLauncher();
-        p.log.success('Spotlight: type "terminal" and pick "Terminal iTerm" once, then it stays on top');
+        p.log.success('Spotlight / Alfred: type "terminal" and pick "Terminal iTerm" once, then it stays on top');
       }
     }
   }

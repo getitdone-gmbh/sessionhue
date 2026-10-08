@@ -13,7 +13,19 @@ import { fileURLToPath } from "node:url";
 const ITERM_DOMAIN = "com.googlecode.iterm2";
 const ITERM_APP = "/Applications/iTerm.app";
 export const ITERM_PROFILE_GUID = "5E5510E0-4A3E-4C2B-9A11-AAA000000001";
-const LAUNCHER = path.join(os.homedir(), "Applications", "Terminal iTerm.app");
+/**
+ * /Applications is searched by Spotlight, Alfred and Raycast alike; fall back
+ * to ~/Applications when it is not writable for this user.
+ */
+function launcherPath(): string {
+  try {
+    fs.accessSync("/Applications", fs.constants.W_OK);
+    return "/Applications/Terminal iTerm.app";
+  } catch {
+    return path.join(os.homedir(), "Applications", "Terminal iTerm.app");
+  }
+}
+const OLD_LAUNCHER = path.join(os.homedir(), "Applications", "Terminal iTerm.app");
 const PACKAGE_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 function run(cmd: string, args: string[]): string {
@@ -58,10 +70,12 @@ export function installProfile(makeDefault: boolean): string {
 }
 
 /**
- * A tiny app named "Terminal iTerm" with the iTerm2 icon. Spotlight lists it
- * when you type "terminal", so the habit cmd+space "terminal" keeps working.
+ * A tiny app named "Terminal iTerm" with the iTerm2 icon. Spotlight, Alfred and
+ * Raycast list it when you type "terminal", so that habit keeps working.
  */
 export function installLauncher(): string {
+  const LAUNCHER = launcherPath();
+  if (OLD_LAUNCHER !== LAUNCHER) fs.rmSync(OLD_LAUNCHER, { recursive: true, force: true });
   fs.mkdirSync(path.dirname(LAUNCHER), { recursive: true });
   fs.rmSync(LAUNCHER, { recursive: true, force: true });
   run("osacompile", [
@@ -81,7 +95,8 @@ export function installLauncher(): string {
 }
 
 export function removeLauncher(): void {
-  fs.rmSync(LAUNCHER, { recursive: true, force: true });
+  fs.rmSync(launcherPath(), { recursive: true, force: true });
+  fs.rmSync(OLD_LAUNCHER, { recursive: true, force: true });
 }
 
 /** Adds the shell hook line to the rc file once. */
