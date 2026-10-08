@@ -1,20 +1,59 @@
 # sessionhue · terminal session colors
 
-Give every terminal session its own color and title, so you can tell ten open tabs apart at a glance. Built for people who run many parallel sessions, for example several Claude Code agents in different repos.
+Give every terminal session its own color and title, so you can tell 10, 20 or 50 open sessions apart at a glance. Built for people who run many sessions in parallel, for example several Claude Code agents in different repos.
 
-- **Color without touching your output.** The color is a tab indicator, never a background behind console text.
-- **Accessible by default.** Wherever a label sits on the color, sessionhue keeps WCAG AAA contrast (7:1) and adjusts colors that don't reach it. A built-in checker tells you why.
+- **Color without touching your output.** The color lives in the tab or title bar, never as a background behind console text.
+- **Accessible by default.** Wherever a label sits on the color, sessionhue keeps WCAG AAA contrast (7:1) and adjusts colors that fall short. A built-in checker shows the numbers.
 - **Any color, fast.** Pick from a palette in an interactive menu, or use any `#hex`.
-- **Presets per repo.** Save a look once and every new session in that repo gets it automatically.
-- **Suggestions from your history.** sessionhue reads which repos you worked in (including past Claude Code sessions) and proposes distinct colors for them.
+- **Presets per repo.** Save a look once, and every new session in that repo gets it automatically.
+- **Suggestions from your history.** sessionhue looks at the repos you worked in (including past Claude Code sessions) and proposes a distinct color for each.
+- **Scales to 50+ sessions.** After the 12 named colors, new colors are generated to be as different as possible from the ones already in use.
 
 ## Install
 
+Requires Node.js 18 or newer and macOS (Linux works for kitty, WezTerm and generic terminals).
+
+From the latest release:
+
 ```sh
-npm install -g sessionhue
+npm install -g https://github.com/getitdone-gmbh/sessionhue/releases/download/v0.1.0/sessionhue-0.1.0.tgz
 ```
 
-Requires Node 18+. `shue` is a short alias for `sessionhue`.
+Or straight from the repository:
+
+```sh
+npm install -g github:getitdone-gmbh/sessionhue
+```
+
+Check it works:
+
+```sh
+sessionhue --help
+```
+
+`shue` is installed as a short alias for `sessionhue`.
+
+## Quick start
+
+```sh
+# 1. Color the current tab
+sessionhue blue api
+
+# 2. Turn the repos you work in into presets (pick them from a list)
+sessionhue suggest --save
+
+# 3. Apply presets automatically whenever you cd into a repo
+echo 'eval "$(sessionhue init zsh)"' >> ~/.zshrc
+
+# 4. Optional: color Claude Code sessions on start
+sessionhue claude --write
+```
+
+**For the most visible result, use iTerm2 with the Minimal theme.** The session color then fills the whole title bar of the window, readable from across the room. It is drawn by iTerm2 itself: no overlay, nothing behind your text.
+
+```sh
+defaults write com.googlecode.iterm2 TabStyleWithAutomaticOption -int 5   # iTerm2 > Settings > Appearance > Theme > Minimal
+```
 
 ## Usage
 
@@ -24,14 +63,14 @@ sessionhue set blue api       # color this tab blue, title "api"
 sessionhue blue api           # same, shorter
 sessionhue set "#ff8800"      # any hex color (lifted to AAA if needed)
 sessionhue set green --save   # and remember it for this repo
-sessionhue reset
+sessionhue reset              # back to the default look
 ```
 
 ### Presets and suggestions
 
 ```sh
-sessionhue suggest            # repos you worked in, with a proposed color each
-sessionhue suggest --save     # pick which ones become presets
+sessionhue suggest            # repos you worked in, each with a proposed color
+sessionhue suggest --save     # choose which ones become presets
 sessionhue preset list
 sessionhue preset add api --color teal --title "API" --match ~/code/api
 sessionhue preset rm api
@@ -42,14 +81,17 @@ A preset matches a folder and everything inside it. The most specific match wins
 
 ### Automatic coloring
 
-Shell hook, colors the tab when you `cd` into a repo with a preset, and keeps your title when the shell (oh-my-zsh, starship, ...) resets it on every prompt:
+The shell hook applies the matching preset when you `cd` into a repo. It also keeps your title in place when the shell or a prompt framework (oh-my-zsh, starship, ...) resets it on every prompt.
 
 ```sh
 # ~/.zshrc
 eval "$(sessionhue init zsh)"
+
+# ~/.bashrc
+eval "$(sessionhue init bash)"
 ```
 
-Claude Code hook, colors the tab when a session starts and re-applies it after Claude Code renamed the tab:
+The Claude Code hook colors the tab when a session starts and re-applies it after Claude Code renames the tab for a new topic:
 
 ```sh
 sessionhue claude          # print the hook config
@@ -58,11 +100,19 @@ sessionhue claude --write  # add it to ~/.claude/settings.json
 
 If you prefer your own titles over Claude Code's automatic ones, set `CLAUDE_CODE_DISABLE_TERMINAL_TITLE=1`.
 
+## Colors
+
+```sh
+sessionhue colors
+```
+
+`red`, `orange`, `amber`, `green`, `teal`, `cyan`, `blue`, `indigo`, `purple`, `pink`, `brown`, `gray`, or any `#hex`. German names work too (`rot`, `blau`, `gruen`, ...).
+
 ## Accessibility
 
 Color is never the only signal: every session also has a text title.
 
-When a label is drawn on top of the color (colored tabs in iTerm2, kitty, WezTerm), the color must reach the configured contrast against black or white text. The default is **AAA (7:1)**. Every palette color passes; custom colors that don't are shifted to the closest passing shade, and sessionhue tells you.
+When a label is drawn on top of the color (iTerm2 title bar, kitty and WezTerm tabs), the color must reach the configured contrast against black or white text. The default is **AAA (7:1)**. Every palette color passes. Custom colors that don't are shifted to the closest passing shade, and sessionhue tells you about it.
 
 ```sh
 sessionhue check "#0090ff"
@@ -72,27 +122,21 @@ sessionhue check "#0090ff"
 #    closest AAA shade: #1499ff (7.03:1)
 
 sessionhue check "#e5484d" --text "#ffffff"   # check a specific text color
-sessionhue colors                             # palette with ratings
 ```
 
-`check` exits with code 1 when the color fails the configured level, so it can be used in scripts.
+`check` exits with code 1 when the color fails the configured level, so you can use it in scripts.
 
 ## Terminal support
 
-| Terminal | Indicator |
-| --- | --- |
-| iTerm2 | Colored tab + title |
-| kitty | Colored tab with black/white label + title (needs `allow_remote_control yes`) |
-| WezTerm | Colored tab via user vars + title (snippet below) |
-| Terminal.app, Ghostty, others | Colored dot in the tab title, e.g. `🔵 api` |
+| Terminal | Indicator | Status |
+| --- | --- | --- |
+| iTerm2 | Colored tab and title bar (Minimal theme: whole title bar) + title | tested |
+| Terminal.app | Colored dot in the tab title, e.g. `🔵 api` | tested |
+| kitty | Colored tab with black/white label + title (needs `allow_remote_control yes`) | untested |
+| WezTerm | Colored tab via user vars + title (snippet below) | untested |
+| Ghostty, others | Colored dot in the tab title | untested |
 
-Terminal.app and Ghostty cannot color tabs, so the closest of nine colored dots is used there.
-
-**Best visibility: iTerm2 with the Minimal theme** (Settings → Appearance → Theme → Minimal). The tab color then fills the whole title bar of the window, readable from across the room, and it is drawn by iTerm2 itself: no overlay, nothing behind your text.
-
-```sh
-defaults write com.googlecode.iterm2 TabStyleWithAutomaticOption -int 5   # Minimal theme
-```
+Terminal.app and Ghostty cannot color tabs, so the closest of nine colored dots is used there. Reports and fixes for the untested terminals are very welcome.
 
 ### WezTerm snippet
 
@@ -113,7 +157,7 @@ end)
 
 ## Configuration
 
-`~/.config/sessionhue/config.json` (override the folder with `SESSIONHUE_HOME`):
+`~/.config/sessionhue/config.json` (change the folder with `SESSIONHUE_HOME`):
 
 ```json
 {
@@ -128,6 +172,26 @@ end)
 - `contrast`: `"AAA"` (7:1), `"AA"` (4.5:1) or `"off"`.
 - `autoColorUnknownRepos`: on `apply`, give repos without a preset their suggested color.
 
+## Uninstall
+
+```sh
+npm uninstall -g sessionhue
+rm -rf ~/.config/sessionhue
+```
+
+Then remove the `eval "$(sessionhue init zsh)"` line from your shell config and the `sessionhue apply` hooks from `~/.claude/settings.json`, if you added them.
+
+## Development
+
+```sh
+git clone https://github.com/getitdone-gmbh/sessionhue.git
+cd sessionhue
+npm install
+npm run build
+npm test
+npm link        # use your local build as the global `sessionhue`
+```
+
 ## License
 
-MIT
+[0BSD](LICENSE): do whatever you want with it. No conditions, no attribution required.
