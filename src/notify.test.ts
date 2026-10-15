@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { allDone, colorWord, gist, noticeFor, outdatedBy, plain, toolKey } from "./notify.js";
+import { allDone, colorWord, waitingOnTimer, gist, noticeFor, outdatedBy, plain, toolKey } from "./notify.js";
 
 test("Stop: done notice with the last message and a reply field", () => {
   const n = noticeFor({ hook_event_name: "Stop", last_assistant_message: "All **tests** pass.\n\nShip it?" }, "api", "en")!;
@@ -74,8 +74,18 @@ test("clearing: another tool finishing in parallel keeps an approval open", () =
   assert.equal(outdatedBy(pending, { hook_event_name: "UserPromptSubmit" }, 2000), true);
 });
 
-test("Stop with background agents still running: no notification yet", () => {
-  assert.equal(noticeFor({ hook_event_name: "Stop", last_assistant_message: "Waiting for the agents.", background_tasks: [{ id: "a" }] }, "x"), null);
+test("Stop while the agent waits on its own timer: no notification yet", () => {
+  const timer = { type: "shell", status: "running", command: "sleep 600" };
+  assert.equal(noticeFor({ hook_event_name: "Stop", last_assistant_message: "Waiting.", background_tasks: [timer] }, "x"), null);
+  assert.equal(waitingOnTimer({ background_tasks: [{ status: "running", command: "until curl -s localhost; do sleep 5; done" }] }), true);
+});
+
+test("Stop with a dev server, monitor or subagent in the background: notification, but no close", () => {
+  for (const task of [{ type: "shell", status: "running", command: "npm run dev" }, { type: "agent", status: "running", description: "Review" }]) {
+    const n = noticeFor({ hook_event_name: "Stop", last_assistant_message: "Done.", background_tasks: [task] }, "x", "en")!;
+    assert.equal(n.subtitle, "done");
+    assert.deepEqual(n.actions.map((a) => a.id), ["reply"]);
+  }
 });
 
 test("colorWord names the nearest palette color", () => {

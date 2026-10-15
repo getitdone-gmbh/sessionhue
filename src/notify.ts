@@ -38,6 +38,11 @@ export type AgentEvent = {
 const OPEN_WORK = /\b(todo|next steps?|still (running|open|pending|to do)|not (yet|done)|pending|waiting|later|follow[- ]up|noch nicht|noch offen|als n[äa]chstes|n[äa]chste[nr]? schritte?|l[äa]uft noch|ausstehend|offen(e|er|es|en)? punkte|warte|sp[äa]ter)\b/i;
 const NOTHING_OPEN = /\b(nichts (mehr )?offen|nothing (left )?open|nothing left)\b/gi;
 
+// The agent waits on a timer of its own (e.g. "sleep 600") and goes on by itself; dev servers, monitors and subagents do not count.
+export function waitingOnTimer(event: AgentEvent): boolean {
+  return (event.background_tasks ?? []).some((task: any) => task?.status !== "completed" && /(^|[;&|(]\s*|\bdo\s+)sleep\s+\d/.test(String(task?.command ?? "")));
+}
+
 // Finished for good: no question, no background agents or scheduled jobs, and nothing named as still open.
 export function allDone(event: AgentEvent, message: string): boolean {
   if (event.background_tasks?.length || event.session_crons?.length) return false;
@@ -93,8 +98,7 @@ export function noticeFor(event: AgentEvent, label: string, lang = language()): 
   const name = event.hook_event_name ?? (event.type === "agent-turn-complete" ? "Stop" : undefined);
 
   if (name === "Stop") {
-    // Background agents still running: the turn goes on by itself when they report back.
-    if (event.stop_hook_active || event.background_tasks?.length) return null;
+    if (event.stop_hook_active || waitingOnTimer(event)) return null;
     const message = event.last_assistant_message ?? event["last-assistant-message"] ?? "";
     const last = gist(message);
     const done = !last.question && allDone(event, message);
@@ -228,12 +232,21 @@ export function postNotice(notice: Notice, tty: string, kind: TerminalKind, tool
   runNotifier(["post", JSON.stringify(payload)]);
 }
 
+const LOG_FILE = path.join(os.homedir(), "Library", "Logs", "sessionhue.log");
+
+function log(message: string): void {
+  try {
+    fs.appendFileSync(LOG_FILE, `${new Date().toISOString().slice(0, 19)}Z ${message}\n`);
+  } catch {}
+}
+
 // Hook entry: reads the event, clears what is outdated and posts what needs attention.
 export function handleEvent(event: AgentEvent, tty: string, kind: TerminalKind): void {
   const name = event.hook_event_name ?? "";
   // Process start is when the hook fired, even if it ran late in the background.
   if (CLEAR_EVENTS.includes(name)) return clearNotice(tty, event, Math.floor(performance.timeOrigin));
   const notice = noticeFor(event, sessionLabel(tty, event.cwd ?? process.cwd()));
+  if (!notice && name === "Stop") log(`skip Stop for ${tty}: ${event.stop_hook_active ? "stop hook active" : "agent waits on its own timer"}`);
   if (notice) postNotice(notice, tty, kind, name === "Stop" ? "" : toolKey(event));
 }
 

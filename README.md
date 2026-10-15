@@ -160,7 +160,7 @@ sessionhue notify test    # send a test notification to this session
 
 You get a native macOS notification when an agent:
 
-- **is done**: the question at the end of its last message, or else its last paragraph, with **Reply…** to send the next prompt right from the notification. Only when everything is finished ("done · nothing open": no question, no background agents or scheduled jobs, nothing named as still open), **Close session** ends the agent with `/exit` and closes its iTerm2 tab or window. While background agents are still running, "done" waits until they report back.
+- **is done**: the question at the end of its last message, or else its last paragraph, with **Reply…** to send the next prompt right from the notification. Only when everything is finished ("done · nothing open": no question, no background agents or scheduled jobs, nothing named as still open), **Close session** ends the agent with `/exit` and closes its iTerm2 tab or window. Background work like dev servers, monitors or subagents never holds a notification back; only while the agent waits on a timer of its own (e.g. `sleep 600`), "done" waits until it goes on.
 - **needs an approval** (Claude Code): **Allow**, **Always allow** (when Claude Code offers it), **Deny** and **Deny with note…**.
 - **asks a question** (Claude Code): one entry per answer, plus **Own answer…** for free text.
 
