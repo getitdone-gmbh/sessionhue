@@ -150,18 +150,45 @@ function runNotifier(args: string[]): void {
   spawn(NOTIFIER_BIN, args, { detached: true, stdio: "ignore" }).unref();
 }
 
-export function clearNotice(tty: string): void {
-  if (!fs.existsSync(pendingFile(tty))) return;
+// What an open notification waits for: posted at `at` (ms), for one tool call or (empty) the whole turn.
+export type Pending = { token: string; at: number; tool: string };
+
+// The tool a notification waits for, so a different tool finishing in parallel leaves it alone.
+// By name only: the input can differ after the call (e.g. answers added), and a notification left open too long could type into a session that moved on.
+export function toolKey(event: AgentEvent): string {
+  return event.tool_name ?? "";
+}
+
+function readPending(tty: string): Pending | null {
+  try {
+    const [token, at, tool] = fs.readFileSync(pendingFile(tty), "utf8").split("\n");
+    return { token, at: Number(at) || 0, tool: tool ?? "" };
+  } catch {
+    return null;
+  }
+}
+
+// Hooks for clearing run in the background, so one can arrive after a newer notification was posted.
+export function outdatedBy(pending: Pending, event: AgentEvent, happenedAt: number): boolean {
+  if (pending.at > happenedAt) return false;
+  if (event.hook_event_name === "PostToolUse" && pending.tool && pending.tool !== toolKey(event)) return false;
+  return true;
+}
+
+export function clearNotice(tty: string, event: AgentEvent, happenedAt: number): void {
+  const pending = readPending(tty);
+  if (!pending || !outdatedBy(pending, event, happenedAt)) return;
   fs.rmSync(pendingFile(tty), { force: true });
   runNotifier(["clear", notificationId(tty)]);
 }
 
-export function postNotice(notice: Notice, tty: string, kind: TerminalKind): void {
+export function postNotice(notice: Notice, tty: string, kind: TerminalKind, tool = ""): void {
   // Typing answers into the session needs iTerm2; elsewhere the notification only informs.
   const actions = kind === "iterm" ? notice.actions : [];
   const token = crypto.randomUUID();
   fs.mkdirSync(PENDING_DIR, { recursive: true });
-  fs.writeFileSync(pendingFile(tty), token);
+  // First line is the token the notifier checks; then post time and the awaited tool call.
+  fs.writeFileSync(pendingFile(tty), `${token}\n${Date.now()}\n${tool}`);
   const payload = { id: notificationId(tty), tty, ...notice, actions, token, pendingFile: pendingFile(tty), skipIfFocused: true };
   runNotifier(["post", JSON.stringify(payload)]);
 }
@@ -169,9 +196,10 @@ export function postNotice(notice: Notice, tty: string, kind: TerminalKind): voi
 // Hook entry: reads the event, clears what is outdated and posts what needs attention.
 export function handleEvent(event: AgentEvent, tty: string, kind: TerminalKind): void {
   const name = event.hook_event_name ?? "";
-  if (CLEAR_EVENTS.includes(name)) return clearNotice(tty);
+  // Process start is when the hook fired, even if it ran late in the background.
+  if (CLEAR_EVENTS.includes(name)) return clearNotice(tty, event, Math.floor(performance.timeOrigin));
   const notice = noticeFor(event, sessionLabel(tty, event.cwd ?? process.cwd()));
-  if (notice) postNotice(notice, tty, kind);
+  if (notice) postNotice(notice, tty, kind, name === "Stop" ? "" : toolKey(event));
 }
 
 // Installs the notifier app: the prebuilt one from the package, or a fresh build when Xcode tools are there.

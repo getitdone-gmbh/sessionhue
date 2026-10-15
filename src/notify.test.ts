@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { gist, noticeFor, plain } from "./notify.js";
+import { gist, noticeFor, outdatedBy, plain, toolKey } from "./notify.js";
 
 test("Stop: done notice with the last message and a reply field", () => {
   const n = noticeFor({ hook_event_name: "Stop", last_assistant_message: "All **tests** pass.\n\nShip it?" }, "api", "en")!;
@@ -52,4 +52,18 @@ test("gist: the question at the end wins over a long report", () => {
   const report = "Workbase part A is done. 27 commits on the branch:\n\n- one\n- two\n- three\n\nThe PR is ready. Should I merge it now, or wait for the review?";
   assert.deepEqual(gist(report), { text: "The PR is ready. Should I merge it now, or wait for the review?", question: true });
   assert.deepEqual(gist("Intro.\n\nAll green, nothing left."), { text: "All green, nothing left.", question: false });
+});
+
+test("clearing: a late background hook never removes a newer notification", () => {
+  const stop = { token: "t", at: 2000, tool: "" };
+  assert.equal(outdatedBy(stop, { hook_event_name: "PostToolUse", tool_name: "AskUserQuestion" }, 1500), false);
+  assert.equal(outdatedBy(stop, { hook_event_name: "UserPromptSubmit" }, 2500), true);
+});
+
+test("clearing: another tool finishing in parallel keeps an approval open", () => {
+  const bash = { hook_event_name: "PermissionRequest", tool_name: "Bash", tool_input: { command: "npm test" } };
+  const pending = { token: "t", at: 1000, tool: toolKey(bash) };
+  assert.equal(outdatedBy(pending, { hook_event_name: "PostToolUse", tool_name: "Read", tool_input: { file_path: "/x" } }, 2000), false);
+  assert.equal(outdatedBy(pending, { hook_event_name: "PostToolUse", tool_name: "Bash", tool_input: { command: "npm test", extra: 1 } }, 2000), true);
+  assert.equal(outdatedBy(pending, { hook_event_name: "UserPromptSubmit" }, 2000), true);
 });

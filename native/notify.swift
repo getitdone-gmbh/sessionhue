@@ -34,6 +34,10 @@ let logFile = FileManager.default.homeDirectoryForCurrentUser.appendingPathCompo
 func log(_ message: String) {
     let line = "\(ISO8601DateFormatter().string(from: Date())) \(message)\n"
     FileHandle.standardError.write(line.data(using: .utf8)!)
+    // Keep the log small: start over past 512 KB.
+    if let size = try? FileManager.default.attributesOfItem(atPath: logFile.path)[.size] as? Int, size > 512_000 {
+        try? FileManager.default.removeItem(at: logFile)
+    }
     if let h = try? FileHandle(forWritingTo: logFile) {
         h.seekToEndOfFile()
         h.write(line.data(using: .utf8)!)
@@ -107,7 +111,7 @@ func isFocused(_ tty: String) -> Bool {
 
 func stillPending(_ info: [AnyHashable: Any]) -> Bool {
     guard let file = info["pendingFile"] as? String, let token = info["token"] as? String else { return true }
-    let current = (try? String(contentsOfFile: file, encoding: .utf8))?.trimmingCharacters(in: .whitespacesAndNewlines)
+    let current = (try? String(contentsOfFile: file, encoding: .utf8))?.split(separator: "\n").first.map(String.init)
     return current == token
 }
 
