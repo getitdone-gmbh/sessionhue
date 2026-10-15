@@ -26,6 +26,8 @@ struct Post: Codable {
     var actions: [Action]
     var skipIfFocused: Bool?
     var sendTitle: String?
+    // Session color as #rrggbb, shown as a swatch next to the text.
+    var color: String?
 }
 
 let center = UNUserNotificationCenter.current()
@@ -105,6 +107,23 @@ func isFocused(_ tty: String) -> Bool {
     return runScript(script) == "yes"
 }
 
+// A rounded square in the session color, attached as the notification's thumbnail.
+func swatch(_ hex: String, id: String) -> UNNotificationAttachment? {
+    let digits = hex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
+    guard digits.count == 6, let value = UInt32(digits, radix: 16) else { return nil }
+    let color = NSColor(srgbRed: CGFloat((value >> 16) & 0xff) / 255, green: CGFloat((value >> 8) & 0xff) / 255, blue: CGFloat(value & 0xff) / 255, alpha: 1)
+    let size = 128
+    guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: size, pixelsHigh: size, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0) else { return nil }
+    NSGraphicsContext.saveGraphicsState()
+    NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+    color.setFill()
+    NSBezierPath(roundedRect: NSRect(x: 0, y: 0, width: size, height: size), xRadius: 28, yRadius: 28).fill()
+    NSGraphicsContext.restoreGraphicsState()
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent("sessionhue-\(id)-\(UUID().uuidString).png")
+    guard let png = rep.representation(using: .png, properties: [:]), (try? png.write(to: url)) != nil else { return nil }
+    return try? UNNotificationAttachment(identifier: "color", url: url, options: nil)
+}
+
 func stillPending(_ info: [AnyHashable: Any]) -> Bool {
     guard let file = info["pendingFile"] as? String, let token = info["token"] as? String else { return true }
     let current = (try? String(contentsOfFile: file, encoding: .utf8))?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -137,6 +156,7 @@ func post(_ p: Post, done: @escaping () -> Void) {
             content.body = p.body
             content.sound = .default
             content.categoryIdentifier = categoryId
+            if let hex = p.color, let attachment = swatch(hex, id: p.id) { content.attachments = [attachment] }
             content.threadIdentifier = p.tty
             var info: [String: Any] = ["tty": p.tty, "keys": Dictionary(uniqueKeysWithValues: p.actions.map { ($0.id, $0.keys ?? []) })]
             if let f = p.pendingFile { info["pendingFile"] = f }

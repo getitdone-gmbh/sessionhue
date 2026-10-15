@@ -13,7 +13,7 @@ Give every terminal session its own color and title, so you can tell 10, 20 or 5
 - **Presets per repo.** Save a look once, and every new session in that repo gets it automatically.
 - **Suggestions from your history.** sessionhue looks at the repos you worked in (including past Claude Code sessions) and proposes a distinct color for each.
 - **Scales to 50+ sessions.** After the 12 named colors, new colors are generated to be as different as possible from the ones already in use.
-- **Answer agents from a notification.** When Claude Code or Codex is done, needs an approval or asks a question, you get a macOS notification in the session's color, with the answers to pick from (macOS, iTerm2).
+- **Answer agents from a notification.** When Claude Code or Codex is done, needs an approval or asks a question, you get a macOS notification with the session's color as a swatch, with the answers to pick from (macOS, iTerm2).
 
 ## Install
 
