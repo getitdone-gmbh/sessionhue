@@ -28,6 +28,8 @@ struct Post: Codable {
     var actions: [Action]
     var skipIfFocused: Bool?
     var sendTitle: String?
+    // When set, the title becomes the iTerm2 session name plus this suffix.
+    var titleSuffix: String?
 }
 
 let center = UNUserNotificationCenter.current()
@@ -106,6 +108,16 @@ func closeSession(_ tty: String) {
     _ = runScript(inSession(tty, "tell s to close"))
 }
 
+// The iTerm2 session name without the spinner glyph in front and the "(claude)" behind, e.g. "Workbase renaming".
+func sessionName(_ tty: String) -> String? {
+    guard let raw = runScript(inSession(tty, "return name of s")), raw != "missing" else { return nil }
+    let name = raw
+        .replacingOccurrences(of: "^[^\\p{L}\\p{N}]+", with: "", options: .regularExpression)
+        .replacingOccurrences(of: "\\s*\\([^)]*\\)$", with: "", options: .regularExpression)
+        .trimmingCharacters(in: .whitespaces)
+    return name.isEmpty ? nil : name
+}
+
 func isFocused(_ tty: String) -> Bool {
     let script = """
     tell application id "com.googlecode.iterm2"
@@ -144,7 +156,7 @@ func post(_ p: Post, done: @escaping () -> Void) {
             let kept = existing.filter { !$0.identifier.hasPrefix("sessionhue.\(p.id).") }.suffix(40)
             center.setNotificationCategories(Set(kept).union([category]))
             let content = UNMutableNotificationContent()
-            content.title = p.title
+            if let suffix = p.titleSuffix, let name = sessionName(p.tty) { content.title = name + suffix } else { content.title = p.title }
             if let s = p.subtitle { content.subtitle = s }
             content.body = p.body
             content.sound = .default
@@ -184,6 +196,7 @@ class Delegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegat
             post(p, done: quit)
         case "clear":
             let ids = Array(args.dropFirst())
+            log("clear \(ids)")
             center.removeDeliveredNotifications(withIdentifiers: ids)
             center.removePendingNotificationRequests(withIdentifiers: ids)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: quit)

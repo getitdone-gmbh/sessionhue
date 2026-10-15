@@ -160,11 +160,11 @@ sessionhue notify test    # send a test notification to this session
 
 You get a native macOS notification when an agent:
 
-- **is done**: the question at the end of its last message, or else its last paragraph, with **Reply…** to send the next prompt right from the notification. When nothing is left to answer ("done · nothing open"), **Close session** ends the agent with `/exit` and closes its iTerm2 tab or window.
+- **is done**: the question at the end of its last message, or else its last paragraph, with **Reply…** to send the next prompt right from the notification. Only when everything is finished ("done · nothing open": no question, no background agents or scheduled jobs, nothing named as still open), **Close session** ends the agent with `/exit` and closes its iTerm2 tab or window. While background agents are still running, "done" waits until they report back.
 - **needs an approval** (Claude Code): **Allow**, **Always allow** (when Claude Code offers it), **Deny** and **Deny with note…**.
 - **asks a question** (Claude Code): one entry per answer, plus **Own answer…** for free text.
 
-The answers are under **Options** when you hover the notification. sessionhue types your choice into the iTerm2 session the notification belongs to, so the terminal and the notification always show the same state. Clicking the notification brings that session to the front.
+The title is the name of the iTerm2 session (the topic Claude Code gives it) and its window color, e.g. "Workbase renaming · yellow". The answers are under **Options** when you hover the notification. sessionhue types your choice into the iTerm2 session the notification belongs to, so the terminal and the notification always show the same state. Clicking the notification brings that session to the front.
 
 Closing a notification with **X** changes nothing: the agent keeps waiting in the terminal, and you answer there when you are ready. When you answer in the terminal first, the notification disappears. A notification never types into a session that has moved on. No notification shows for the session you are looking at.
 

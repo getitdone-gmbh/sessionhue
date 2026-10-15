@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { gist, noticeFor, outdatedBy, plain, toolKey } from "./notify.js";
+import { allDone, colorWord, gist, noticeFor, outdatedBy, plain, toolKey } from "./notify.js";
 
 test("Stop: done notice with the last message and a reply field", () => {
   const n = noticeFor({ hook_event_name: "Stop", last_assistant_message: "All **tests** pass.\n\nShip it?" }, "api", "en")!;
@@ -8,6 +8,9 @@ test("Stop: done notice with the last message and a reply field", () => {
   assert.equal(n.subtitle, "asks");
   assert.equal(n.body, "Ship it?");
   assert.equal(noticeFor({ hook_event_name: "Stop", last_assistant_message: "Done." }, "api", "en")!.subtitle, "done · nothing open");
+  const open = noticeFor({ hook_event_name: "Stop", last_assistant_message: "Part A is merged. Part B is not done yet." }, "api", "en")!;
+  assert.equal(open.subtitle, "done");
+  assert.deepEqual(open.actions.map((a) => a.id), ["reply"]);
   assert.deepEqual(n.actions.map((a) => a.id), ["reply"]);
   const finished = noticeFor({ hook_event_name: "Stop", last_assistant_message: "All done, PR is merged." }, "api", "de")!;
   assert.equal(finished.subtitle, "fertig · nichts offen");
@@ -69,4 +72,22 @@ test("clearing: another tool finishing in parallel keeps an approval open", () =
   assert.equal(outdatedBy(pending, { hook_event_name: "PostToolUse", tool_name: "Read", tool_input: { file_path: "/x" } }, 2000), false);
   assert.equal(outdatedBy(pending, { hook_event_name: "PostToolUse", tool_name: "Bash", tool_input: { command: "npm test", extra: 1 } }, 2000), true);
   assert.equal(outdatedBy(pending, { hook_event_name: "UserPromptSubmit" }, 2000), true);
+});
+
+test("Stop with background agents still running: no notification yet", () => {
+  assert.equal(noticeFor({ hook_event_name: "Stop", last_assistant_message: "Waiting for the agents.", background_tasks: [{ id: "a" }] }, "x"), null);
+});
+
+test("colorWord names the nearest palette color", () => {
+  assert.equal(colorWord("#ffca16", "de"), "gelb");
+  assert.equal(colorWord("#4ccce6", "en"), "cyan");
+  assert.equal(colorWord("#ff8dcc", "de"), "rosa");
+});
+
+test("allDone: only when nothing runs, nothing is scheduled and nothing is named as open", () => {
+  assert.equal(allDone({}, "Alles erledigt, nichts mehr offen."), true);
+  assert.equal(allDone({}, "Teil A ist fertig, Teil B läuft noch."), false);
+  assert.equal(allDone({}, "Als Nächstes kommt das Review."), false);
+  assert.equal(allDone({ session_crons: [{ id: "c" }] }, "Done."), false);
+  assert.equal(allDone({ background_tasks: [{ id: "a" }] }, "Done."), false);
 });

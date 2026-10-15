@@ -4,8 +4,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { PALETTE, colorDistance } from "./colors.js";
 import { CONFIG_DIR } from "./config.js";
-import { TITLES_DIR, type TerminalKind } from "./terminal.js";
+import { TITLES_DIR, type TerminalKind, knownColor } from "./terminal.js";
 
 // Notifications when an agent is done or waits for you, with the answers as notification actions.
 // The notifier app types the chosen answer into the iTerm2 session; closing a notification changes nothing.
@@ -16,7 +17,7 @@ const PENDING_DIR = path.join(CONFIG_DIR, "pending");
 const PACKAGE_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 export type NotifyAction = { id: string; title: string; keys?: string[]; reply?: boolean; placeholder?: string; destructive?: boolean; close?: boolean };
-export type Notice = { title: string; subtitle?: string; body: string; actions: NotifyAction[]; sendTitle?: string };
+export type Notice = { title: string; subtitle?: string; body: string; actions: NotifyAction[]; sendTitle?: string; titleSuffix?: string };
 
 // Hook payload of Claude Code (hook_event_name) or Codex (type), reduced to what we use.
 export type AgentEvent = {
@@ -29,7 +30,19 @@ export type AgentEvent = {
   last_assistant_message?: string;
   "last-assistant-message"?: string;
   stop_hook_active?: boolean;
+  background_tasks?: unknown[];
+  session_crons?: unknown[];
 };
+
+// Words in an agent's last message that mean work is still open, even without a question.
+const OPEN_WORK = /\b(todo|next steps?|still (running|open|pending|to do)|not (yet|done)|pending|waiting|later|follow[- ]up|noch nicht|noch offen|als n[äa]chstes|n[äa]chste[nr]? schritte?|l[äa]uft noch|ausstehend|offen(e|er|es|en)? punkte|warte|sp[äa]ter)\b/i;
+const NOTHING_OPEN = /\b(nichts (mehr )?offen|nothing (left )?open|nothing left)\b/gi;
+
+// Finished for good: no question, no background agents or scheduled jobs, and nothing named as still open.
+export function allDone(event: AgentEvent, message: string): boolean {
+  if (event.background_tasks?.length || event.session_crons?.length) return false;
+  return !OPEN_WORK.test(message.replace(NOTHING_OPEN, ""));
+}
 
 const ESC = "\u001b";
 const ENTER = "\r";
@@ -80,16 +93,19 @@ export function noticeFor(event: AgentEvent, label: string, lang = language()): 
   const name = event.hook_event_name ?? (event.type === "agent-turn-complete" ? "Stop" : undefined);
 
   if (name === "Stop") {
-    if (event.stop_hook_active) return null;
-    const last = gist(event.last_assistant_message ?? event["last-assistant-message"] ?? "");
+    // Background agents still running: the turn goes on by itself when they report back.
+    if (event.stop_hook_active || event.background_tasks?.length) return null;
+    const message = event.last_assistant_message ?? event["last-assistant-message"] ?? "";
+    const last = gist(message);
+    const done = !last.question && allDone(event, message);
     return {
       title: label,
-      subtitle: last.question ? t.question : t.nothingOpen,
+      subtitle: last.question ? t.question : done ? t.nothingOpen : t.done,
       body: last.text || t.agentDone,
       actions: [
         { id: "reply", title: t.reply, reply: true, keys: [], placeholder: `${t.replyTo} ${label}` },
-        // Nothing left to answer: offer to end the agent and close its tab or window.
-        ...(last.question ? [] : [{ id: "close", title: t.closeSession, keys: ["/exit", ENTER], close: true }]),
+        // Everything finished: offer to end the agent and close its tab or window.
+        ...(!done ? [] : [{ id: "close", title: t.closeSession, keys: ["/exit", ENTER], close: true }]),
       ],
       sendTitle: t.send,
     };
@@ -125,6 +141,18 @@ export function noticeFor(event: AgentEvent, label: string, lang = language()): 
   }
 
   return null;
+}
+
+const COLOR_WORDS = {
+  en: { red: "red", orange: "orange", amber: "yellow", green: "green", teal: "teal", cyan: "cyan", blue: "blue", indigo: "lavender", purple: "purple", pink: "pink", brown: "beige", gray: "gray" },
+  de: { red: "rot", orange: "orange", amber: "gelb", green: "grün", teal: "türkis", cyan: "cyan", blue: "blau", indigo: "lavendel", purple: "lila", pink: "rosa", brown: "beige", gray: "grau" },
+} as const;
+
+// The session color as a word, so the notification points to the window with that title bar color.
+export function colorWord(hex: string, lang = language()): string {
+  let best: keyof typeof PALETTE = "gray";
+  for (const name of Object.keys(PALETTE)) if (colorDistance(hex, PALETTE[name]) < colorDistance(hex, PALETTE[best])) best = name;
+  return (COLOR_WORDS[lang] as Record<string, string>)[best] ?? best;
 }
 
 // Events after which an open notification of this session is outdated.
@@ -193,7 +221,10 @@ export function postNotice(notice: Notice, tty: string, kind: TerminalKind, tool
   fs.mkdirSync(PENDING_DIR, { recursive: true });
   // First line is the token the notifier checks; then post time and the awaited tool call.
   fs.writeFileSync(pendingFile(tty), `${token}\n${Date.now()}\n${tool}`);
-  const payload = { id: notificationId(tty), tty, ...notice, actions, token, pendingFile: pendingFile(tty), skipIfFocused: true };
+  const color = knownColor(tty);
+  // The notifier swaps the title for the iTerm2 session name (the topic Claude Code gives it) and keeps this suffix.
+  const titleSuffix = color && kind === "iterm" ? ` · ${colorWord(color)}` : undefined;
+  const payload = { id: notificationId(tty), tty, ...notice, title: notice.title + (titleSuffix ?? ""), titleSuffix, actions, token, pendingFile: pendingFile(tty), skipIfFocused: true };
   runNotifier(["post", JSON.stringify(payload)]);
 }
 
