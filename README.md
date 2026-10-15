@@ -13,6 +13,7 @@ Give every terminal session its own color and title, so you can tell 10, 20 or 5
 - **Presets per repo.** Save a look once, and every new session in that repo gets it automatically.
 - **Suggestions from your history.** sessionhue looks at the repos you worked in (including past Claude Code sessions) and proposes a distinct color for each.
 - **Scales to 50+ sessions.** After the 12 named colors, new colors are generated to be as different as possible from the ones already in use.
+- **Answer agents from a notification.** When Claude Code or Codex is done, needs an approval or asks a question, you get a macOS notification in the session's color, with the answers to pick from (macOS, iTerm2).
 
 ## Install
 
@@ -150,6 +151,30 @@ sessionhue claude --write  # add it to ~/.claude/settings.json
 
 If you prefer your own titles over Claude Code's automatic ones, set `CLAUDE_CODE_DISABLE_TERMINAL_TITLE=1`.
 
+## Notifications
+
+```sh
+sessionhue notify setup   # install the notifier and the hooks
+sessionhue notify test    # send a test notification to this session
+```
+
+You get a native macOS notification when an agent:
+
+- **is done**: the last message as text, with **Reply…** to send the next prompt right from the notification.
+- **needs an approval** (Claude Code): **Allow**, **Always allow** (when Claude Code offers it), **Deny** and **Deny with note…**.
+- **asks a question** (Claude Code): one entry per answer, plus **Own answer…** for free text.
+
+The answers are under **Options** when you hover the notification. sessionhue types your choice into the iTerm2 session the notification belongs to, so the terminal and the notification always show the same state. Clicking the notification brings that session to the front.
+
+Closing a notification with **X** changes nothing: the agent keeps waiting in the terminal, and you answer there when you are ready. When you answer in the terminal first, the notification disappears. A notification never types into a session that has moved on. No notification shows for the session you are looking at.
+
+- Running Claude Code sessions pick up the hooks right away, no restart needed.
+- Codex gets a notification when a turn is complete (its `notify` setting in `~/.codex/config.toml`).
+- macOS asks once to allow notifications and once to let sessionhue control iTerm2 (for typing your answer).
+- To keep notifications on screen until you answer: **System Settings > Notifications > sessionhue > Alerts**.
+- Answers need iTerm2. In other terminals the notifications only inform.
+- Questions with several parts or multiple choice are answered in the terminal.
+
 ## Colors
 
 ```sh
@@ -231,9 +256,10 @@ sessionhue launcher remove
 rm -f ~/Library/Application\ Support/iTerm2/DynamicProfiles/sessionhue-light-aaa.json
 npm uninstall -g sessionhue
 rm -rf ~/.config/sessionhue
+rm -rf ~/Applications/sessionhue.app
 ```
 
-Then remove the `eval "$(sessionhue init zsh)"` line from your shell config and the `sessionhue apply` hooks from `~/.claude/settings.json`, if you added them. iTerm2 itself stays installed.
+Then remove the `eval "$(sessionhue init zsh)"` line from your shell config, the `sessionhue apply` and `sessionhue notify` hooks from `~/.claude/settings.json` and the `notify` line from `~/.codex/config.toml`, if you added them. iTerm2 itself stays installed.
 
 ## Development
 

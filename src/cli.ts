@@ -8,6 +8,7 @@ import { MIN_RATIO, PALETTE, checkContrast, colorName, ensureContrast, resolveCo
 import { type Config, type Preset, configPath, findPreset, loadConfig, projectRoot, saveConfig, upsertPreset } from "./config.js";
 import { suggestFor, suggestions, recordUse } from "./history.js";
 import { brewAvailable, installIterm, installLauncher, installProfile, installShellHook, isMac, itermInstalled, itermRunning, quitIterm, removeLauncher, setMinimalTheme } from "./setup.js";
+import { CLEAR_EVENTS, type AgentEvent, handleEvent, installNotifier, notifierInstalled, postNotice, language } from "./notify.js";
 import { type Look, TITLES_DIR, applyLook, detectTerminal, findTty, rememberColor, resetLook, sessionColor } from "./terminal.js";
 
 const HELP = `sessionhue · terminal session colors
@@ -28,6 +29,8 @@ Usage
   sessionhue profile iterm [--default]  optional: readable light iTerm2 profile (AAA text colors)
   sessionhue launcher [remove]       Spotlight "Terminal iTerm" launcher (macOS)
   sessionhue claude [--write]        Claude Code hook: auto-apply on session start
+  sessionhue notify setup            notifications with answers when an agent is done or waits (macOS)
+  sessionhue notify test             send a test notification to this session
   sessionhue config                  show config file path
 
 Options
@@ -256,16 +259,13 @@ _sessionhue_title() {
   }
 }
 
-function cmdClaude(): void {
-  // SessionStart colors the tab; Stop re-applies it after Claude Code renamed the tab for a new topic.
-  const hook = { matcher: "", hooks: [{ type: "command", command: "sessionhue apply --quiet" }] };
-  const events = ["SessionStart", "Stop"];
-  const file = path.join(process.env.CLAUDE_CONFIG_DIR ?? path.join(os.homedir(), ".claude"), "settings.json");
-  if (!opts.write) {
-    console.log(`Add this to ${file} (or run: sessionhue claude --write):\n`);
-    console.log(JSON.stringify({ hooks: Object.fromEntries(events.map((e) => [e, [hook]])) }, null, 2));
-    return;
-  }
+type HookEntry = { matcher?: string; hooks: { type: "command"; command: string; async?: boolean }[] };
+
+const claudeSettingsFile = () => path.join(process.env.CLAUDE_CONFIG_DIR ?? path.join(os.homedir(), ".claude"), "settings.json");
+
+// Adds hooks to Claude Code's settings once; returns the events that got a new hook.
+function addClaudeHooks(hooks: Record<string, HookEntry>, marker: string): string[] {
+  const file = claudeSettingsFile();
   let settings: Record<string, any> = {};
   if (fs.existsSync(file)) {
     try {
@@ -275,15 +275,100 @@ function cmdClaude(): void {
     }
   }
   settings.hooks ??= {};
-  const added = events.filter((e) => {
-    settings.hooks[e] ??= [];
-    if (JSON.stringify(settings.hooks[e]).includes("sessionhue apply")) return false;
-    settings.hooks[e].push(hook);
+  const added = Object.entries(hooks).filter(([event, entry]) => {
+    settings.hooks[event] ??= [];
+    if (JSON.stringify(settings.hooks[event]).includes(marker)) return false;
+    settings.hooks[event].push(entry);
     return true;
   });
+  if (added.length) fs.writeFileSync(file, JSON.stringify(settings, null, 2) + "\n");
+  return added.map(([event]) => event);
+}
+
+function cmdClaude(): void {
+  // SessionStart colors the tab; Stop re-applies it after Claude Code renamed the tab for a new topic.
+  const hook: HookEntry = { matcher: "", hooks: [{ type: "command", command: "sessionhue apply --quiet" }] };
+  const hooks = { SessionStart: hook, Stop: hook };
+  if (!opts.write) {
+    console.log(`Add this to ${claudeSettingsFile()} (or run: sessionhue claude --write):\n`);
+    console.log(JSON.stringify({ hooks: Object.fromEntries(Object.entries(hooks).map(([e, h]) => [e, [h]])) }, null, 2));
+    return;
+  }
+  const added = addClaudeHooks(hooks, "sessionhue apply");
   if (!added.length) return console.log("Claude Code hooks already installed");
-  fs.writeFileSync(file, JSON.stringify(settings, null, 2) + "\n");
-  console.log(`installed ${added.join(" + ")} hooks in ${file}`);
+  console.log(`installed ${added.join(" + ")} hooks in ${claudeSettingsFile()}`);
+}
+
+const NOTIFY_HOOK = "sessionhue notify";
+
+function notifyHooks(): Record<string, HookEntry> {
+  const command = (async?: boolean): HookEntry["hooks"] => [{ type: "command", command: NOTIFY_HOOK, ...(async ? { async } : {}) }];
+  return {
+    Stop: { hooks: command() },
+    PermissionRequest: { hooks: command() },
+    PreToolUse: { matcher: "AskUserQuestion", hooks: command() },
+    // These only withdraw a notification that is outdated, so they never slow Claude Code down.
+    ...Object.fromEntries(CLEAR_EVENTS.map((e) => [e, { hooks: command(true) }])),
+  };
+}
+
+// Codex runs `notify` with the event as JSON in the last argument when a turn is complete.
+function addCodexNotify(): string | null {
+  const file = path.join(process.env.CODEX_HOME ?? path.join(os.homedir(), ".codex"), "config.toml");
+  if (!fs.existsSync(path.dirname(file))) return null;
+  const current = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "";
+  if (/^\s*notify\s*=/m.test(current)) return current.includes(NOTIFY_HOOK) ? file : null;
+  // Top-level keys must come before the first [table].
+  const line = 'notify = ["sessionhue", "notify"]\n';
+  const at = current.search(/^\s*\[/m);
+  fs.writeFileSync(file, at < 0 ? `${current}${current && !current.endsWith("\n") ? "\n" : ""}${line}` : `${current.slice(0, at)}${line}\n${current.slice(at)}`);
+  return file;
+}
+
+function readEvent(): AgentEvent | null {
+  // Codex passes the event as argument, Claude Code on stdin.
+  const raw = rest[0]?.startsWith("{") ? rest[0] : fs.readFileSync(0, "utf8");
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+function notifySetup(): void {
+  if (!isMac()) fail("notifications need macOS");
+  console.log(`installed ${installNotifier()}`);
+  const added = addClaudeHooks(notifyHooks(), NOTIFY_HOOK);
+  console.log(added.length ? `installed ${added.join(" + ")} hooks in ${claudeSettingsFile()}` : "Claude Code hooks already installed");
+  const codex = addCodexNotify();
+  if (codex) console.log(`Codex: notify in ${codex}`);
+  console.log("Running Claude Code sessions pick this up right away.");
+  console.log('Tip: System Settings > Notifications > sessionhue > "Alerts" keeps notifications on screen until you answer.');
+}
+
+function notifyTest(): void {
+  if (!notifierInstalled()) fail("run `sessionhue notify setup` first");
+  const de = language() === "de";
+  postNotice(
+    {
+      title: `${path.basename(cwd)} · test`,
+      body: de ? "So sieht eine Mitteilung von sessionhue aus. Die Antwort landet in diesem Terminal." : "This is how sessionhue notifications look. Your answer lands in this terminal.",
+      actions: [{ id: "reply", title: de ? "Antworten…" : "Reply…", reply: true, keys: [] }],
+    },
+    tty(),
+    detectTerminal(),
+  );
+}
+
+function cmdNotify(): void {
+  const sub = rest[0];
+  if (sub === "setup") return notifySetup();
+  if (sub === "test") return notifyTest();
+  // Hook mode: never fail or print, an agent must not be disturbed by a notification problem.
+  opts.quiet = true;
+  const event = readEvent();
+  const t = findTty();
+  if (event && t) handleEvent(event, t, detectTerminal());
 }
 
 function rating(ratio: number): string {
@@ -358,6 +443,13 @@ async function cmdSetup(config: Config): Promise<void> {
     opts.write = true;
     cmdClaude();
   }
+  if (isMac() && (await yes("Notify you when an agent is done or waits for you, with the answers in the notification (Claude Code, Codex)?"))) {
+    try {
+      notifySetup();
+    } catch (err) {
+      p.log.warn(`notifications skipped: ${err instanceof Error ? err.message : err}`);
+    }
+  }
   const list = suggestions(config);
   if (list.length && (await yes(`Create presets for ${list.length} repos you worked in?`))) {
     opts.save = true;
@@ -421,6 +513,8 @@ async function main(): Promise<void> {
       return cmdInit();
     case "claude":
       return cmdClaude();
+    case "notify":
+      return cmdNotify();
     case "config":
       return console.log(configPath());
     case "which":

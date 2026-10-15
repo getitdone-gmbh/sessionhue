@@ -9,6 +9,7 @@ cd "$(dirname "$0")/.."
 
 rm -rf release && mkdir -p release/command
 npm run build >/dev/null
+native/build.sh >/dev/null
 npm test >/dev/null
 npm pack --pack-destination release >/dev/null
 cp release/sessionhue-*.tgz release/sessionhue.tgz
