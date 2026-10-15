@@ -1,18 +1,21 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { noticeFor, plain } from "./notify.js";
+import { gist, noticeFor, plain } from "./notify.js";
 
 test("Stop: done notice with the last message and a reply field", () => {
   const n = noticeFor({ hook_event_name: "Stop", last_assistant_message: "All **tests** pass.\n\nShip it?" }, "api", "en")!;
-  assert.equal(n.title, "api · done");
-  assert.equal(n.body, "All tests pass. Ship it?");
+  assert.equal(n.title, "api");
+  assert.equal(n.subtitle, "asks");
+  assert.equal(n.body, "Ship it?");
+  assert.equal(noticeFor({ hook_event_name: "Stop", last_assistant_message: "Done." }, "api", "en")!.subtitle, "done");
   assert.deepEqual(n.actions.map((a) => a.id), ["reply"]);
   assert.equal(noticeFor({ hook_event_name: "Stop", stop_hook_active: true }, "api"), null);
 });
 
 test("Codex turn complete counts as done", () => {
   const n = noticeFor({ type: "agent-turn-complete", "last-assistant-message": "Fixed." }, "web", "de")!;
-  assert.equal(n.title, "web · fertig");
+  assert.equal(n.title, "web");
+  assert.equal(n.subtitle, "fertig");
   assert.equal(n.body, "Fixed.");
 });
 
@@ -43,4 +46,10 @@ test("question with several questions or multi select: informs only", () => {
 test("plain strips markdown and shortens", () => {
   assert.equal(plain("see [docs](http://x) and `code`"), "see docs and code");
   assert.equal(plain("a".repeat(300), 10).length, 10);
+});
+
+test("gist: the question at the end wins over a long report", () => {
+  const report = "Workbase part A is done. 27 commits on the branch:\n\n- one\n- two\n- three\n\nThe PR is ready. Should I merge it now, or wait for the review?";
+  assert.deepEqual(gist(report), { text: "The PR is ready. Should I merge it now, or wait for the review?", question: true });
+  assert.deepEqual(gist("Intro.\n\nAll green, nothing left."), { text: "All green, nothing left.", question: false });
 });

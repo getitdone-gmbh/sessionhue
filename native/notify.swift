@@ -25,6 +25,7 @@ struct Post: Codable {
     var token: String?
     var actions: [Action]
     var skipIfFocused: Bool?
+    var sendTitle: String?
 }
 
 let center = UNUserNotificationCenter.current()
@@ -120,7 +121,7 @@ func post(_ p: Post, done: @escaping () -> Void) {
         let actions: [UNNotificationAction] = p.actions.map { a in
             let options: UNNotificationActionOptions = a.destructive == true ? [.destructive] : []
             if a.reply == true {
-                return UNTextInputNotificationAction(identifier: a.id, title: a.title, options: options, textInputButtonTitle: "Send", textInputPlaceholder: a.placeholder ?? "")
+                return UNTextInputNotificationAction(identifier: a.id, title: a.title, options: options, textInputButtonTitle: p.sendTitle ?? "Send", textInputPlaceholder: a.placeholder ?? "")
             }
             return UNNotificationAction(identifier: a.id, title: a.title, options: options)
         }

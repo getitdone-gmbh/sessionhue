@@ -17,7 +17,7 @@ const PENDING_DIR = path.join(CONFIG_DIR, "pending");
 const PACKAGE_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 export type NotifyAction = { id: string; title: string; keys?: string[]; reply?: boolean; placeholder?: string; destructive?: boolean };
-export type Notice = { title: string; subtitle?: string; body: string; actions: NotifyAction[] };
+export type Notice = { title: string; subtitle?: string; body: string; actions: NotifyAction[]; sendTitle?: string };
 
 // Hook payload of Claude Code (hook_event_name) or Codex (type), reduced to what we use.
 export type AgentEvent = {
@@ -36,8 +36,8 @@ const ESC = "\u001b";
 const ENTER = "\r";
 
 const TEXT = {
-  en: { done: "done", waiting: "needs your approval", question: "asks", allow: "Allow", always: "Always allow", deny: "Deny", denyWith: "Deny with note…", reply: "Reply…", own: "Own answer…", openTerminal: "Answer in the terminal", agentDone: "Agent finished" },
-  de: { done: "fertig", waiting: "braucht deine Freigabe", question: "fragt", allow: "Erlauben", always: "Immer erlauben", deny: "Ablehnen", denyWith: "Ablehnen mit Hinweis…", reply: "Antworten…", own: "Eigene Antwort…", openTerminal: "Im Terminal antworten", agentDone: "Agent ist durchgelaufen" },
+  en: { send: "Send", replyTo: "Answer to", done: "done", waiting: "needs your approval", question: "asks", allow: "Allow", always: "Always allow", deny: "Deny", denyWith: "Deny with note…", reply: "Reply…", own: "Own answer…", openTerminal: "Answer in the terminal", agentDone: "Agent finished" },
+  de: { send: "Senden", replyTo: "Antwort an", done: "fertig", waiting: "braucht deine Freigabe", question: "fragt", allow: "Erlauben", always: "Immer erlauben", deny: "Ablehnen", denyWith: "Ablehnen mit Hinweis…", reply: "Antworten…", own: "Eigene Antwort…", openTerminal: "Im Terminal antworten", agentDone: "Agent ist durchgelaufen" },
 };
 
 export function language(): keyof typeof TEXT {
@@ -59,6 +59,22 @@ function toolSummary(tool: string, input: Record<string, any> = {}): string {
   return tool;
 }
 
+// The part of a long agent message worth reading in a notification: its last question, or else its last paragraph.
+export function gist(text: string, max = 240): { text: string; question: boolean } {
+  const paragraphs = text.split(/\n\s*\n/).map((p) => plain(p, 10_000)).filter(Boolean);
+  const tail = paragraphs.slice(-2);
+  for (let i = tail.length - 1; i >= 0; i--) {
+    const sentences = tail[i].split(/(?<=[.!?:])\s+/);
+    for (let j = sentences.length - 1; j >= 0; j--) {
+      if (!sentences[j].includes("?")) continue;
+      // A short question gets the sentence before it as context.
+      const withContext = sentences[j].length < 80 && j > 0 ? `${sentences[j - 1]} ${sentences[j]}` : sentences[j];
+      return { text: plain(withContext, max), question: true };
+    }
+  }
+  return { text: plain(paragraphs.at(-1) ?? "", max), question: false };
+}
+
 // What to show for an event, or null when it needs no notification.
 export function noticeFor(event: AgentEvent, label: string, lang = language()): Notice | null {
   const t = TEXT[lang];
@@ -66,11 +82,13 @@ export function noticeFor(event: AgentEvent, label: string, lang = language()): 
 
   if (name === "Stop") {
     if (event.stop_hook_active) return null;
-    const last = event.last_assistant_message ?? event["last-assistant-message"] ?? "";
+    const last = gist(event.last_assistant_message ?? event["last-assistant-message"] ?? "");
     return {
-      title: `${label} · ${t.done}`,
-      body: plain(last) || t.agentDone,
-      actions: [{ id: "reply", title: t.reply, reply: true, keys: [] }],
+      title: label,
+      subtitle: last.question ? t.question : t.done,
+      body: last.text || t.agentDone,
+      actions: [{ id: "reply", title: t.reply, reply: true, keys: [], placeholder: `${t.replyTo} ${label}` }],
+      sendTitle: t.send,
     };
   }
 
@@ -81,14 +99,15 @@ export function noticeFor(event: AgentEvent, label: string, lang = language()): 
     const options: any[] = q.options ?? [];
     const answerable = questions.length === 1 && !q.multiSelect && options.length > 0;
     return {
-      title: `${label} · ${t.question}`,
-      subtitle: questions.length > 1 ? `1/${questions.length} · ${q.header ?? ""}`.trim() : q.header,
+      title: label,
+      subtitle: [t.question, q.header, questions.length > 1 ? `1/${questions.length}` : ""].filter(Boolean).join(" · "),
+      sendTitle: t.send,
       body: plain(q.question ?? ""),
       actions: answerable
         ? [
             ...options.map((o, i) => ({ id: `option${i + 1}`, title: plain(String(o.label), 40), keys: [String(i + 1)] })),
             // The first entry after the options is the free-text field.
-            { id: "own", title: t.own, reply: true, keys: [String(options.length + 1)] },
+            { id: "own", title: t.own, reply: true, keys: [String(options.length + 1)], placeholder: plain(q.question ?? "", 60) },
           ]
         : [],
     };
@@ -98,8 +117,8 @@ export function noticeFor(event: AgentEvent, label: string, lang = language()): 
     const actions: NotifyAction[] = [{ id: "allow", title: t.allow, keys: ["1"] }];
     // Claude Code only offers "don't ask again" as option 2 when it has a suggestion for it.
     if (event.permission_suggestions?.length) actions.push({ id: "always", title: t.always, keys: ["2"] });
-    actions.push({ id: "deny", title: t.deny, keys: [ESC], destructive: true }, { id: "denyWith", title: t.denyWith, keys: [ESC], reply: true });
-    return { title: `${label} · ${t.waiting}`, subtitle: event.tool_name, body: plain(toolSummary(event.tool_name, event.tool_input)), actions };
+    actions.push({ id: "deny", title: t.deny, keys: [ESC], destructive: true }, { id: "denyWith", title: t.denyWith, keys: [ESC], reply: true, placeholder: t.denyWith.replace("…", "") });
+    return { title: label, subtitle: `${t.waiting} · ${event.tool_name}`, body: plain(toolSummary(event.tool_name, event.tool_input), 240), actions, sendTitle: t.send };
   }
 
   return null;
