@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { CONFIG_DIR } from "./config.js";
-import { TITLES_DIR, type TerminalKind, knownColor } from "./terminal.js";
+import { TITLES_DIR, type TerminalKind } from "./terminal.js";
 
 // Notifications when an agent is done or waits for you, with the answers as notification actions.
 // The notifier app types the chosen answer into the iTerm2 session; closing a notification changes nothing.
@@ -126,7 +126,7 @@ export function noticeFor(event: AgentEvent, label: string, lang = language()): 
 // Events after which an open notification of this session is outdated.
 export const CLEAR_EVENTS = ["UserPromptSubmit", "PostToolUse", "SessionEnd"];
 
-// Plain session name; the color is shown as a swatch image, never as an emoji.
+// Plain session name, without the emoji dot Terminal.app titles carry.
 export function sessionLabel(tty: string, cwd: string): string {
   let title = "";
   try {
@@ -162,8 +162,7 @@ export function postNotice(notice: Notice, tty: string, kind: TerminalKind): voi
   const token = crypto.randomUUID();
   fs.mkdirSync(PENDING_DIR, { recursive: true });
   fs.writeFileSync(pendingFile(tty), token);
-  const color = knownColor(tty) ?? undefined;
-  const payload = { id: notificationId(tty), tty, ...notice, actions, color, token, pendingFile: pendingFile(tty), skipIfFocused: true };
+  const payload = { id: notificationId(tty), tty, ...notice, actions, token, pendingFile: pendingFile(tty), skipIfFocused: true };
   runNotifier(["post", JSON.stringify(payload)]);
 }
 

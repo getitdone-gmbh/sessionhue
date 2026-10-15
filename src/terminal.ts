@@ -100,15 +100,6 @@ export function rememberColor(tty: string, color: string | null): void {
   }
 }
 
-// Color this session already has, without assigning one.
-export function knownColor(tty: string): string | null {
-  try {
-    return fs.readFileSync(path.join(COLORS_DIR, path.basename(tty)), "utf8").trim() || null;
-  } catch {
-    return null;
-  }
-}
-
 /** ttys that still have a process attached, e.g. "ttys004". */
 function openTtys(): Set<string> {
   try {
