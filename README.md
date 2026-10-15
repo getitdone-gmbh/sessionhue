@@ -160,7 +160,7 @@ sessionhue notify test    # send a test notification to this session
 
 You get a native macOS notification when an agent:
 
-- **is done**: the question at the end of its last message, or else its last paragraph, with **Reply…** to send the next prompt right from the notification.
+- **is done**: the question at the end of its last message, or else its last paragraph, with **Reply…** to send the next prompt right from the notification. When nothing is left to answer ("done · nothing open"), **Close session** ends the agent with `/exit` and closes its iTerm2 tab or window.
 - **needs an approval** (Claude Code): **Allow**, **Always allow** (when Claude Code offers it), **Deny** and **Deny with note…**.
 - **asks a question** (Claude Code): one entry per answer, plus **Own answer…** for free text.
 

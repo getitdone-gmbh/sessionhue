@@ -15,7 +15,7 @@ const NOTIFIER_BIN = path.join(NOTIFIER_APP, "Contents", "MacOS", "sessionhue");
 const PENDING_DIR = path.join(CONFIG_DIR, "pending");
 const PACKAGE_ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 
-export type NotifyAction = { id: string; title: string; keys?: string[]; reply?: boolean; placeholder?: string; destructive?: boolean };
+export type NotifyAction = { id: string; title: string; keys?: string[]; reply?: boolean; placeholder?: string; destructive?: boolean; close?: boolean };
 export type Notice = { title: string; subtitle?: string; body: string; actions: NotifyAction[]; sendTitle?: string };
 
 // Hook payload of Claude Code (hook_event_name) or Codex (type), reduced to what we use.
@@ -35,8 +35,8 @@ const ESC = "\u001b";
 const ENTER = "\r";
 
 const TEXT = {
-  en: { send: "Send", replyTo: "Answer to", done: "done", waiting: "needs your approval", question: "asks", allow: "Allow", always: "Always allow", deny: "Deny", denyWith: "Deny with note…", reply: "Reply…", own: "Own answer…", openTerminal: "Answer in the terminal", agentDone: "Agent finished" },
-  de: { send: "Senden", replyTo: "Antwort an", done: "fertig", waiting: "braucht deine Freigabe", question: "fragt", allow: "Erlauben", always: "Immer erlauben", deny: "Ablehnen", denyWith: "Ablehnen mit Hinweis…", reply: "Antworten…", own: "Eigene Antwort…", openTerminal: "Im Terminal antworten", agentDone: "Agent ist durchgelaufen" },
+  en: { send: "Send", replyTo: "Answer to", done: "done", waiting: "needs your approval", question: "asks", allow: "Allow", always: "Always allow", deny: "Deny", denyWith: "Deny with note…", reply: "Reply…", own: "Own answer…", openTerminal: "Answer in the terminal", agentDone: "Agent finished", nothingOpen: "done · nothing open", closeSession: "Close session" },
+  de: { send: "Senden", replyTo: "Antwort an", done: "fertig", waiting: "braucht deine Freigabe", question: "fragt", allow: "Erlauben", always: "Immer erlauben", deny: "Ablehnen", denyWith: "Ablehnen mit Hinweis…", reply: "Antworten…", own: "Eigene Antwort…", openTerminal: "Im Terminal antworten", agentDone: "Agent ist durchgelaufen", nothingOpen: "fertig · nichts offen", closeSession: "Session schließen" },
 };
 
 export function language(): keyof typeof TEXT {
@@ -84,9 +84,13 @@ export function noticeFor(event: AgentEvent, label: string, lang = language()): 
     const last = gist(event.last_assistant_message ?? event["last-assistant-message"] ?? "");
     return {
       title: label,
-      subtitle: last.question ? t.question : t.done,
+      subtitle: last.question ? t.question : t.nothingOpen,
       body: last.text || t.agentDone,
-      actions: [{ id: "reply", title: t.reply, reply: true, keys: [], placeholder: `${t.replyTo} ${label}` }],
+      actions: [
+        { id: "reply", title: t.reply, reply: true, keys: [], placeholder: `${t.replyTo} ${label}` },
+        // Nothing left to answer: offer to end the agent and close its tab or window.
+        ...(last.question ? [] : [{ id: "close", title: t.closeSession, keys: ["/exit", ENTER], close: true }]),
+      ],
       sendTitle: t.send,
     };
   }

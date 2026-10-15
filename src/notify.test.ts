@@ -7,15 +7,18 @@ test("Stop: done notice with the last message and a reply field", () => {
   assert.equal(n.title, "api");
   assert.equal(n.subtitle, "asks");
   assert.equal(n.body, "Ship it?");
-  assert.equal(noticeFor({ hook_event_name: "Stop", last_assistant_message: "Done." }, "api", "en")!.subtitle, "done");
+  assert.equal(noticeFor({ hook_event_name: "Stop", last_assistant_message: "Done." }, "api", "en")!.subtitle, "done · nothing open");
   assert.deepEqual(n.actions.map((a) => a.id), ["reply"]);
+  const finished = noticeFor({ hook_event_name: "Stop", last_assistant_message: "All done, PR is merged." }, "api", "de")!;
+  assert.equal(finished.subtitle, "fertig · nichts offen");
+  assert.deepEqual(finished.actions.map((a) => [a.id, a.keys, a.close]), [["reply", [], undefined], ["close", ["/exit", "\r"], true]]);
   assert.equal(noticeFor({ hook_event_name: "Stop", stop_hook_active: true }, "api"), null);
 });
 
 test("Codex turn complete counts as done", () => {
   const n = noticeFor({ type: "agent-turn-complete", "last-assistant-message": "Fixed." }, "web", "de")!;
   assert.equal(n.title, "web");
-  assert.equal(n.subtitle, "fertig");
+  assert.equal(n.subtitle, "fertig · nichts offen");
   assert.equal(n.body, "Fixed.");
 });
 

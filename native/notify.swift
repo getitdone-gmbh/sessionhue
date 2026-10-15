@@ -12,6 +12,8 @@ struct Action: Codable {
     var reply: Bool?
     var placeholder: String?
     var destructive: Bool?
+    // After the keys (e.g. "/exit"), closes the iTerm2 session, and with it the tab or window.
+    var close: Bool?
 }
 
 struct Post: Codable {
@@ -98,6 +100,12 @@ func type(_ tty: String, _ keys: [String]) {
     }
 }
 
+func closeSession(_ tty: String) {
+    // Give the agent a moment to exit, so iTerm2 sees only the shell and closes without asking.
+    Thread.sleep(forTimeInterval: 1.5)
+    _ = runScript(inSession(tty, "tell s to close"))
+}
+
 func isFocused(_ tty: String) -> Bool {
     let script = """
     tell application id "com.googlecode.iterm2"
@@ -142,7 +150,7 @@ func post(_ p: Post, done: @escaping () -> Void) {
             content.sound = .default
             content.categoryIdentifier = categoryId
             content.threadIdentifier = p.tty
-            var info: [String: Any] = ["tty": p.tty, "keys": Dictionary(uniqueKeysWithValues: p.actions.map { ($0.id, $0.keys ?? []) })]
+            var info: [String: Any] = ["tty": p.tty, "keys": Dictionary(uniqueKeysWithValues: p.actions.map { ($0.id, $0.keys ?? []) }), "close": p.actions.filter { $0.close == true }.map(\.id)]
             if let f = p.pendingFile { info["pendingFile"] = f }
             if let t = p.token { info["token"] = t }
             content.userInfo = info
@@ -207,6 +215,7 @@ class Delegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegat
                 type(tty, keys + [reply.userText, "\r"])
             } else {
                 type(tty, keys)
+                if (info["close"] as? [String])?.contains(response.actionIdentifier) == true { closeSession(tty) }
             }
         }
         completionHandler()
