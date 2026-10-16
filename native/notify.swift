@@ -274,6 +274,8 @@ final class Relay {
         guard phone || watch else { return finish() }
         let record = CKRecord(recordType: "Notice", recordID: noticeID)
         record["title"] = title
+        // Groups the notices of one terminal session on the phone.
+        record["session"] = p.tty
         record["subtitle"] = p.subtitle ?? ""
         record["body"] = String(p.body.prefix(600))
         record["sendTitle"] = p.sendTitle ?? "Send"
