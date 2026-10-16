@@ -110,8 +110,10 @@ func focus(_ tty: String) {
 func type(_ tty: String, _ keys: [String]) {
     for (i, key) in keys.enumerated() {
         if i > 0 { Thread.sleep(forTimeInterval: 0.15) }
-        _ = runScript(inSession(tty, "tell s to write text \(appleString(key)) newline NO"))
+        let result = runScript(inSession(tty, "tell s to write text \(appleString(key)) newline NO"))
+        if result != "ok" { return log("type into \(tty): \(result ?? "failed")") }
     }
+    log("typed \(keys.count) keys into \(tty)")
 }
 
 func closeSession(_ tty: String) {
@@ -198,6 +200,7 @@ func answer(_ info: [AnyHashable: Any], _ action: String, text: String?) {
     let keys = (info["keys"] as? [String: [String]])?[action] ?? []
     if !stillPending(info) {
         // Answered in the terminal meanwhile: just show the session.
+        log("\(action) for \(tty) not typed: the session moved on")
         focus(tty)
     } else if let text {
         type(tty, keys + [text, "\r"])
