@@ -196,7 +196,7 @@ sessionhue notify iphone off     # and back off
 
 `sessionhue setup` asks for both too, off by default. On the iPhone, touch and hold the notification for the answers, or tap it to answer in the app. When you answer on the Mac or in the terminal first, the notification disappears from the phone.
 
-Everything goes through your own iCloud (private CloudKit database): no server, no account, no costs. It needs the [sessionhue iPhone app](https://github.com/alexfriedl/sessionhue-ios), open once to allow notifications, with the same Apple Account as the Mac, and a notifier signed with the sessionhue iCloud container (`native/build.sh --icloud`, which `notify iphone on` runs for you). The iPhone app is not in the App Store yet.
+Everything goes through your own iCloud (private CloudKit database): no server, no account, no costs. It needs the sessionhue app on your iPhone (beta on TestFlight: [join the beta](https://testflight.apple.com/join/1bP3DW3m)), opened once to allow notifications, with the same Apple Account as on the Mac.
 
 ## Colors
 
@@ -293,7 +293,7 @@ npm install
 npm run build
 npm test
 npm link        # use your local build as the global `sessionhue`
-./scripts/build-release.sh   # release assets into ./release
+./scripts/build-release.sh   # release assets into ./release (notarizes the notifier: needs ASC_KEY_PATH, ASC_KEY_ID, ASC_ISSUER_ID)
 ```
 
 ## License

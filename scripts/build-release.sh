@@ -6,10 +6,12 @@
 #   Install-sessionhue.zip    double-click installer ("Install sessionhue.command")
 set -euo pipefail
 cd "$(dirname "$0")/.."
+: "${ASC_KEY_PATH:?notarizing needs ASC_KEY_PATH, ASC_KEY_ID and ASC_ISSUER_ID}"
 
 rm -rf release && mkdir -p release/command
 npm run build >/dev/null
-native/build.sh >/dev/null
+# The notifier ships signed with Developer ID and notarized, with the iCloud container for iPhone and Apple Watch.
+native/build.sh --release >/dev/null
 npm test >/dev/null
 npm pack --pack-destination release >/dev/null
 cp release/sessionhue-*.tgz release/sessionhue.tgz

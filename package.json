@@ -18,7 +18,8 @@
     "native/icon.icns",
     "install.sh",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "native/project.yml"
   ],
   "scripts": {
     "build": "tsc",
