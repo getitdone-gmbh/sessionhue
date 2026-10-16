@@ -37,6 +37,8 @@ targets:
         com.apple.developer.icloud-container-identifiers: [iCloud.com.getitdone.sessionhue]
         com.apple.developer.icloud-services: [CloudKit]
         com.apple.developer.aps-environment: development
+        # The same iCloud environment as the iPhone app from TestFlight and the App Store.
+        com.apple.developer.icloud-container-environment: Production
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.getitdone.sessionhue
