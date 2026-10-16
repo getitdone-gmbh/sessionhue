@@ -1,6 +1,7 @@
 // sessionhue notifier: native macOS notifications with answer actions for terminal sessions.
 // Posted by the sessionhue CLI, answers are typed into the iTerm2 session the notification belongs to.
 import AppKit
+import CloudKit
 import UserNotifications
 
 struct Action: Codable {
@@ -30,6 +31,17 @@ struct Post: Codable {
     var sendTitle: String?
     // When set, the title becomes the iTerm2 session name plus this suffix.
     var titleSuffix: String?
+    // Forward to iPhone / Apple Watch while the Mac is locked or unused.
+    var remote: Remote?
+}
+
+struct Remote: Codable {
+    var iphone: Bool
+    var watch: Bool
+    // Minutes without input on the Mac before a waiting notification goes to the phone.
+    var awayMinutes: Double?
+    // Approval or question with choices: the only kind that goes to Apple Watch.
+    var choices: Bool?
 }
 
 let center = UNUserNotificationCenter.current()
@@ -135,6 +147,9 @@ func stillPending(_ info: [AnyHashable: Any]) -> Bool {
     return current == token
 }
 
+// The title as shown, kept for forwarding the same text to the phone.
+var shownTitle: String?
+
 func post(_ p: Post, done: @escaping () -> Void) {
     if p.skipIfFocused == true && isFocused(p.tty) { return done() }
     center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
@@ -159,6 +174,7 @@ func post(_ p: Post, done: @escaping () -> Void) {
             if let suffix = p.titleSuffix, let name = sessionName(p.tty) { content.title = name + suffix } else { content.title = p.title }
             if let s = p.subtitle { content.subtitle = s }
             content.body = p.body
+            shownTitle = content.title
             content.sound = .default
             content.categoryIdentifier = categoryId
             content.threadIdentifier = p.tty
@@ -175,6 +191,152 @@ func post(_ p: Post, done: @escaping () -> Void) {
         }
     }
 }
+
+// Types the chosen answer into the session, from a click on the Mac or an answer from the phone.
+func answer(_ info: [AnyHashable: Any], _ action: String, text: String?) {
+    let tty = info["tty"] as? String ?? ""
+    let keys = (info["keys"] as? [String: [String]])?[action] ?? []
+    if !stillPending(info) {
+        // Answered in the terminal meanwhile: just show the session.
+        focus(tty)
+    } else if let text {
+        type(tty, keys + [text, "\r"])
+    } else {
+        type(tty, keys)
+        if (info["close"] as? [String])?.contains(action) == true { closeSession(tty) }
+    }
+}
+
+let containerId = "iCloud.com.getitdone.sessionhue"
+
+// Only a notifier signed with the iCloud container can relay; the plain build stays local.
+func canRelay() -> Bool {
+    guard let task = SecTaskCreateFromSelf(nil) else { return false }
+    return SecTaskCopyValueForEntitlement(task, "com.apple.developer.icloud-container-identifiers" as CFString, nil) != nil
+}
+
+func macAway(minutes: Double) -> Bool {
+    if let session = CGSessionCopyCurrentDictionary() as? [String: Any], (session["CGSSessionScreenIsLocked"] as? NSNumber)?.boolValue == true { return true }
+    let idle = CGEventSource.secondsSinceLastEventType(.hidSystemState, eventType: CGEventType(rawValue: ~0)!)
+    return idle >= minutes * 60
+}
+
+// Waits while a notification is open: hands it to the phone once the Mac is unused, and types the answer that comes back.
+final class Relay {
+    let p: Post
+    let remote: Remote
+    let title: String
+    // Held strongly: operations on a database whose container is gone never finish.
+    // All operations run as user initiated; the default (utility) can wait minutes in a background app.
+    let container = CKContainer(identifier: containerId)
+    var db: CKDatabase { container.privateCloudDatabase }
+    let started = Date()
+    var forwarded = false
+    var answered = false
+    var busy = false
+    var timer: Timer?
+
+    init(_ p: Post, remote: Remote, title: String) {
+        self.p = p
+        self.remote = remote
+        self.title = title
+    }
+
+    var token: String { p.token ?? "" }
+    var info: [AnyHashable: Any] {
+        ["tty": p.tty, "pendingFile": p.pendingFile ?? "", "token": token, "keys": Dictionary(uniqueKeysWithValues: p.actions.map { ($0.id, $0.keys ?? []) }), "close": p.actions.filter { $0.close == true }.map(\.id)]
+    }
+    var noticeID: CKRecord.ID { CKRecord.ID(recordName: "notice-\(token)") }
+    var replyID: CKRecord.ID { CKRecord.ID(recordName: "reply-\(token)") }
+
+    func start() {
+        timer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in self?.tick() }
+        tick()
+    }
+
+    func tick() {
+        guard !busy, !answered else { return }
+        // A day is long enough; an agent waiting longer gets its answer in the terminal.
+        if !stillPending(info) || Date().timeIntervalSince(started) > 86_400 { return finish() }
+        if !forwarded {
+            if macAway(minutes: remote.awayMinutes ?? 3) { forward() }
+        } else {
+            checkReply()
+        }
+    }
+
+    func forward() {
+        let phone = remote.iphone
+        let watch = remote.watch && remote.choices == true
+        guard phone || watch else { return finish() }
+        let record = CKRecord(recordType: "Notice", recordID: noticeID)
+        record["title"] = title
+        record["subtitle"] = p.subtitle ?? ""
+        record["body"] = String(p.body.prefix(600))
+        record["sendTitle"] = p.sendTitle ?? "Send"
+        let actions = p.actions.map { a -> [String: Any] in
+            ["id": a.id, "title": a.title, "reply": a.reply ?? false, "placeholder": a.placeholder ?? "", "destructive": a.destructive ?? false]
+        }
+        record["actions"] = String(data: try! JSONSerialization.data(withJSONObject: actions), encoding: .utf8)
+        record["phone"] = phone ? 1 : 0
+        record["watch"] = watch ? 1 : 0
+        busy = true
+        let op = CKModifyRecordsOperation(recordsToSave: [record], recordIDsToDelete: nil)
+        op.qualityOfService = .userInitiated
+        op.modifyRecordsResultBlock = { result in
+            DispatchQueue.main.async {
+                self.busy = false
+                if case .failure(let error) = result { return log("relay: \(error.localizedDescription)") }
+                self.forwarded = true
+                log("relay \(self.p.id) to\(phone ? " iphone" : "")\(watch ? " watch" : "")")
+            }
+        }
+        db.add(op)
+    }
+
+    func checkReply() {
+        busy = true
+        let op = CKFetchRecordsOperation(recordIDs: [replyID])
+        op.qualityOfService = .userInitiated
+        var found: CKRecord?
+        op.perRecordResultBlock = { _, result in found = try? result.get() }
+        op.fetchRecordsResultBlock = { _ in
+            DispatchQueue.main.async {
+                self.busy = false
+                // Typing can take a while; a reply fetched again meanwhile must not be typed twice.
+                guard !self.answered, let record = found, let action = record["action"] as? String else { return }
+                self.answered = true
+                let text = record["text"] as? String
+                log("reply \(action) for \(self.p.tty) from \(record["device"] as? String ?? "phone")")
+                answer(self.info, action, text: text?.isEmpty == false || self.p.actions.first { $0.id == action }?.reply == true ? text ?? "" : nil)
+                center.removeDeliveredNotifications(withIdentifiers: [self.p.id])
+                self.finish()
+            }
+        }
+        db.add(op)
+    }
+
+    // Withdraws the notification from the phone and leaves.
+    func finish() {
+        timer?.invalidate()
+        guard forwarded else { return NSApp.terminate(nil) }
+        busy = true
+        let op = CKModifyRecordsOperation(recordsToSave: nil, recordIDsToDelete: [noticeID, replyID])
+        op.qualityOfService = .userInitiated
+        op.perRecordDeleteBlock = { id, result in
+            if case .failure(let error) = result, (error as? CKError)?.code != .unknownItem { log("withdraw \(id.recordName): \(error.localizedDescription)") }
+        }
+        op.modifyRecordsResultBlock = { _ in
+            log("withdrew \(self.p.id) from the phone")
+            DispatchQueue.main.async { NSApp.terminate(nil) }
+        }
+        db.add(op)
+        // Never hang on a missing network.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 15) { NSApp.terminate(nil) }
+    }
+}
+
+var relay: Relay?
 
 class Delegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     var handled = false
@@ -193,13 +355,36 @@ class Delegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegat
                 log("invalid post payload")
                 exit(2)
             }
-            post(p, done: quit)
+            post(p) {
+                if let remote = p.remote, remote.iphone || remote.watch, p.token != nil, let title = shownTitle, canRelay() {
+                    DispatchQueue.main.async {
+                        relay = Relay(p, remote: remote, title: title)
+                        relay?.start()
+                    }
+                } else {
+                    quit()
+                }
+            }
         case "clear":
             let ids = Array(args.dropFirst())
             log("clear \(ids)")
             center.removeDeliveredNotifications(withIdentifiers: ids)
             center.removePendingNotificationRequests(withIdentifiers: ids)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: quit)
+        case "relay-check":
+            // For `sessionhue notify status`: can this build relay, and is iCloud signed in?
+            guard canRelay() else { print("no-entitlement"); return quit() }
+            let container = CKContainer(identifier: containerId)
+            container.accountStatus { status, _ in
+                guard status == .available else { print("no-account"); return quit() }
+                // Which devices listen: the apps subscribe as "phone-notices" and "watch-notices".
+                container.privateCloudDatabase.fetchAllSubscriptions { subs, _ in
+                    let devices = (subs ?? []).map(\.subscriptionID).filter { $0.hasSuffix("-notices") }.map { $0.replacingOccurrences(of: "-notices", with: "") }
+                    print("devices \(devices.sorted().joined(separator: ","))")
+                    print("ok")
+                    quit()
+                }
+            }
         case "focused":
             print(isFocused(args.dropFirst().first ?? "") ? "yes" : "no")
             quit()
@@ -212,7 +397,6 @@ class Delegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegat
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
         let info = response.notification.request.content.userInfo
         let tty = info["tty"] as? String ?? ""
-        let keys = (info["keys"] as? [String: [String]])?[response.actionIdentifier] ?? []
         log("action \(response.actionIdentifier) for \(tty)")
         switch response.actionIdentifier {
         case UNNotificationDismissActionIdentifier:
@@ -221,18 +405,11 @@ class Delegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegat
         case UNNotificationDefaultActionIdentifier:
             focus(tty)
         default:
-            if !stillPending(info) {
-                // Answered in the terminal meanwhile: just show the session.
-                focus(tty)
-            } else if let reply = response as? UNTextInputNotificationResponse {
-                type(tty, keys + [reply.userText, "\r"])
-            } else {
-                type(tty, keys)
-                if (info["close"] as? [String])?.contains(response.actionIdentifier) == true { closeSession(tty) }
-            }
+            answer(info, response.actionIdentifier, text: (response as? UNTextInputNotificationResponse)?.userText)
         }
         completionHandler()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { NSApp.terminate(nil) }
+        // A process that relays its own notification to the phone keeps going until that one is settled.
+        if relay == nil { DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { NSApp.terminate(nil) } }
     }
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
@@ -240,8 +417,14 @@ class Delegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegat
     }
 }
 
-let app = NSApplication.shared
-let delegate = Delegate()
-app.delegate = delegate
-app.setActivationPolicy(.prohibited)
-app.run()
+@main
+struct Notifier {
+    static let delegate = Delegate()
+
+    static func main() {
+        let app = NSApplication.shared
+        app.delegate = delegate
+        app.setActivationPolicy(.prohibited)
+        app.run()
+    }
+}

@@ -8,7 +8,7 @@ import { MIN_RATIO, PALETTE, checkContrast, colorName, ensureContrast, resolveCo
 import { type Config, type Preset, configPath, findPreset, loadConfig, projectRoot, saveConfig, upsertPreset } from "./config.js";
 import { suggestFor, suggestions, recordUse } from "./history.js";
 import { brewAvailable, installIterm, installLauncher, installProfile, installShellHook, isMac, itermInstalled, itermRunning, quitIterm, removeLauncher, setMinimalTheme } from "./setup.js";
-import { CLEAR_EVENTS, type AgentEvent, handleEvent, installNotifier, notifierInstalled, postNotice, language } from "./notify.js";
+import { CLEAR_EVENTS, type AgentEvent, handleEvent, installNotifier, installRelayNotifier, notifierInstalled, postNotice, language, relayCheck, relayStatus } from "./notify.js";
 import { type Look, TITLES_DIR, applyLook, detectTerminal, findTty, rememberColor, resetLook, sessionColor } from "./terminal.js";
 
 const HELP = `sessionhue · terminal session colors
@@ -30,7 +30,11 @@ Usage
   sessionhue launcher [remove]       Spotlight "Terminal iTerm" launcher (macOS)
   sessionhue claude [--write]        Claude Code hook: auto-apply on session start
   sessionhue notify setup            notifications with answers when an agent is done or waits (macOS)
-  sessionhue notify test             send a test notification to this session
+  sessionhue notify test [--phone]   send a test notification to this session (--phone: to iPhone right away)
+  sessionhue notify iphone on|off    also to your iPhone while the Mac is locked or unused
+  sessionhue notify watch on|off     approvals and questions with choices also to Apple Watch
+  sessionhue notify away <minutes>   minutes without input before forwarding (default 3)
+  sessionhue notify status           what goes where
   sessionhue config                  show config file path
 
 Options
@@ -53,6 +57,7 @@ const { values: opts, positionals } = parseArgs({
     tty: { type: "string" },
     limit: { type: "string", short: "n" },
     text: { type: "string" },
+    phone: { type: "boolean" },
     help: { type: "boolean", short: "h" },
   },
 });
@@ -357,13 +362,70 @@ function notifyTest(): void {
     },
     tty(),
     detectTerminal(),
+    "",
+    opts.phone === true,
   );
+}
+
+// Makes sure the installed notifier can forward: rebuilds it with iCloud when needed. Throws, so setup can go on without it.
+function ensureRelay(): void {
+  let status = relayStatus();
+  if (status === "missing") throw new Error("run `sessionhue notify setup` first");
+  if (status === "no-entitlement") {
+    console.log("building the notifier with iCloud ...");
+    installRelayNotifier();
+    status = relayStatus();
+  }
+  if (status === "no-account") throw new Error("sign in to iCloud on this Mac (System Settings > Apple Account), with the same Apple Account as on your iPhone");
+  if (status !== "ok") throw new Error("this notifier cannot use iCloud");
+}
+
+const DEVICE_NAMES = { iphone: "iPhone", watch: "Apple Watch" } as const;
+
+function notifyDevice(device: "iphone" | "watch", value?: string): void {
+  if (value !== "on" && value !== "off") fail(`usage: sessionhue notify ${device} on|off`);
+  if (value === "on") ensureRelay();
+  const config = loadConfig();
+  config.remote[device] = value === "on";
+  saveConfig(config);
+  console.log(`${DEVICE_NAMES[device]}: ${value}`);
+  if (value === "on") console.log("Needs the sessionhue app on your iPhone, signed in to the same Apple Account. Open it once to allow notifications.");
+}
+
+function notifyAway(value?: string): void {
+  const minutes = Number(value);
+  if (!value || !Number.isFinite(minutes) || minutes < 0) fail("usage: sessionhue notify away <minutes>");
+  const config = loadConfig();
+  config.remote.awayMinutes = minutes;
+  saveConfig(config);
+  console.log(`forward after ${minutes} min without input, or at once when the Mac is locked`);
+}
+
+function notifyStatus(): void {
+  const { remote } = loadConfig();
+  const { status: relay, devices } = relayCheck();
+  const relayText = { ok: "ready", "no-entitlement": "needs the iCloud notifier (turn a device on to build it)", "no-account": "sign in to iCloud on this Mac", missing: "run `sessionhue notify setup`" }[relay];
+  console.log(`Mac:         ${notifierInstalled() ? "on" : "off"}`);
+  const app = (device: string) => (relay !== "ok" ? "" : devices.includes(device) ? ", app connected" : ", app not connected yet (open it once)");
+  console.log(`iPhone:      ${remote.iphone ? "on" : "off"}${remote.iphone ? app("phone") : ""}`);
+  console.log(`Apple Watch: ${remote.watch ? "on" : "off"} (approvals and questions with choices)${remote.watch ? app("watch") : ""}`);
+  console.log(`Forwarding:  after ${remote.awayMinutes} min without input, or at once when the Mac is locked`);
+  if (remote.iphone || remote.watch) console.log(`iCloud:      ${relayText}`);
 }
 
 function cmdNotify(): void {
   const sub = rest[0];
   if (sub === "setup") return notifySetup();
   if (sub === "test") return notifyTest();
+  if (sub === "iphone" || sub === "watch") {
+    try {
+      return notifyDevice(sub, rest[1]);
+    } catch (err) {
+      fail(err instanceof Error ? err.message : String(err));
+    }
+  }
+  if (sub === "away") return notifyAway(rest[1]);
+  if (sub === "status") return notifyStatus();
   // Hook mode: never fail or print, an agent must not be disturbed by a notification problem.
   opts.quiet = true;
   const event = readEvent();
@@ -446,6 +508,16 @@ async function cmdSetup(config: Config): Promise<void> {
   if (isMac() && (await yes("Notify you when an agent is done or waits for you, with the answers in the notification (Claude Code, Codex)?"))) {
     try {
       notifySetup();
+      const iphone = await yes("Also send them to your iPhone while the Mac is locked or unused, with a field to answer (needs the sessionhue iPhone app)?", false);
+      const watch = await yes("And approvals and questions with choices to your Apple Watch?", false);
+      if (iphone || watch) {
+        try {
+          if (iphone) notifyDevice("iphone", "on");
+          if (watch) notifyDevice("watch", "on");
+        } catch (err) {
+          p.log.warn(`iPhone / Apple Watch skipped: ${err instanceof Error ? err.message : err}. Later: sessionhue notify iphone on`);
+        }
+      }
     } catch (err) {
       p.log.warn(`notifications skipped: ${err instanceof Error ? err.message : err}`);
     }

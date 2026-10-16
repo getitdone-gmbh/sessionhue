@@ -164,6 +164,12 @@ You get a native macOS notification when an agent:
 - **needs an approval** (Claude Code): **Allow**, **Always allow** (when Claude Code offers it), **Deny** and **Deny with note…**.
 - **asks a question** (Claude Code): one entry per answer, plus **Own answer…** for free text.
 
+<p>
+  <img src="docs/notify-approval.png" width="372" alt="sessionhue notification for the blue session checkout-api: needs your approval for Bash, run the database migration. The options menu shows Allow, Always allow, Deny and Deny with note.">
+  <img src="docs/notify-question.png" width="372" alt="sessionhue notification for the blue session checkout-api asking which database the new orders service should use. The options menu shows Postgres, SQLite, Keep MongoDB and Own answer.">
+  <img src="docs/notify-done.png" width="372" alt="Expanded sessionhue notification for the blue session checkout-api: the agent asks whether to open a pull request, with a text field to answer and a Send button.">
+</p>
+
 The title is the name of the iTerm2 session (the topic Claude Code gives it) and its window color, e.g. "Workbase renaming · yellow". The answers are under **Options** when you hover the notification. sessionhue types your choice into the iTerm2 session the notification belongs to, so the terminal and the notification always show the same state. Clicking the notification brings that session to the front.
 
 Closing a notification with **X** changes nothing: the agent keeps waiting in the terminal, and you answer there when you are ready. When you answer in the terminal first, the notification disappears. A notification never types into a session that has moved on. No notification shows for the session you are looking at.
@@ -174,6 +180,23 @@ Closing a notification with **X** changes nothing: the agent keeps waiting in th
 - To keep notifications on screen until you answer: **System Settings > Notifications > sessionhue > Alerts**.
 - Answers need iTerm2. In other terminals the notifications only inform.
 - Questions with several parts or multiple choice are answered in the terminal.
+
+### On iPhone and Apple Watch
+
+When you are away from the Mac, notifications can follow you: as soon as the Mac is locked or unused for a few minutes, an open notification also goes to your iPhone, with its answers and a field for free text. Approvals and questions with choices can also go to your Apple Watch. Your answer is typed into the session on the Mac, just like an answer from the Mac notification.
+
+```sh
+sessionhue notify iphone on      # also to your iPhone
+sessionhue notify watch on       # approvals and questions with choices also to Apple Watch
+sessionhue notify away 3         # minutes without input before forwarding (a locked Mac counts at once)
+sessionhue notify status         # what goes where, and whether the apps are connected
+sessionhue notify test --phone   # send a test notification to the iPhone right away
+sessionhue notify iphone off     # and back off
+```
+
+`sessionhue setup` asks for both too, off by default. On the iPhone, touch and hold the notification for the answers, or tap it to answer in the app. When you answer on the Mac or in the terminal first, the notification disappears from the phone.
+
+Everything goes through your own iCloud (private CloudKit database): no server, no account, no costs. It needs the [sessionhue iPhone app](https://github.com/alexfriedl/sessionhue-ios), open once to allow notifications, with the same Apple Account as the Mac, and a notifier signed with the sessionhue iCloud container (`native/build.sh --icloud`, which `notify iphone on` runs for you). The iPhone app is not in the App Store yet.
 
 ## Colors
 

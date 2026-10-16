@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { PALETTE, colorDistance } from "./colors.js";
-import { CONFIG_DIR } from "./config.js";
+import { CONFIG_DIR, loadConfig } from "./config.js";
 import { TITLES_DIR, type TerminalKind, knownColor } from "./terminal.js";
 
 // Notifications when an agent is done or waits for you, with the answers as notification actions.
@@ -218,7 +218,7 @@ export function clearNotice(tty: string, event: AgentEvent, happenedAt: number):
   runNotifier(["clear", notificationId(tty)]);
 }
 
-export function postNotice(notice: Notice, tty: string, kind: TerminalKind, tool = ""): void {
+export function postNotice(notice: Notice, tty: string, kind: TerminalKind, tool = "", forwardNow = false): void {
   // Typing answers into the session needs iTerm2; elsewhere the notification only informs.
   const actions = kind === "iterm" ? notice.actions : [];
   const token = crypto.randomUUID();
@@ -228,7 +228,10 @@ export function postNotice(notice: Notice, tty: string, kind: TerminalKind, tool
   const color = knownColor(tty);
   // The notifier swaps the title for the iTerm2 session name (the topic Claude Code gives it) and keeps this suffix.
   const titleSuffix = color && kind === "iterm" ? ` · ${colorWord(color)}` : undefined;
-  const payload = { id: notificationId(tty), tty, ...notice, title: notice.title + (titleSuffix ?? ""), titleSuffix, actions, token, pendingFile: pendingFile(tty), skipIfFocused: true };
+  const { remote } = loadConfig();
+  // Answers from the phone are typed into the session too, so forwarding needs iTerm2 as well.
+  const relay = kind === "iterm" && (remote.iphone || remote.watch) ? { ...remote, awayMinutes: forwardNow ? 0 : remote.awayMinutes, choices: tool !== "" && actions.some((a) => !a.reply) } : undefined;
+  const payload = { id: notificationId(tty), tty, ...notice, title: notice.title + (titleSuffix ?? ""), titleSuffix, actions, token, pendingFile: pendingFile(tty), skipIfFocused: true, remote: relay };
   runNotifier(["post", JSON.stringify(payload)]);
 }
 
@@ -248,6 +251,32 @@ export function handleEvent(event: AgentEvent, tty: string, kind: TerminalKind):
   const notice = noticeFor(event, sessionLabel(tty, event.cwd ?? process.cwd()));
   if (!notice && name === "Stop") log(`skip Stop for ${tty}: ${event.stop_hook_active ? "stop hook active" : "agent waits on its own timer"}`);
   if (notice) postNotice(notice, tty, kind, name === "Stop" ? "" : toolKey(event));
+}
+
+export type RelayStatus = "ok" | "no-entitlement" | "no-account" | "missing";
+
+// Whether the installed notifier can forward to iPhone and Apple Watch (iCloud build, signed in to iCloud).
+export function relayStatus(): RelayStatus {
+  return relayCheck().status;
+}
+
+// Also tells which devices listen ("phone", "watch"): their apps subscribe when opened.
+export function relayCheck(): { status: RelayStatus; devices: string[] } {
+  if (!notifierInstalled()) return { status: "missing", devices: [] };
+  const result = spawnSync(NOTIFIER_BIN, ["relay-check"], { encoding: "utf8", timeout: 20_000 });
+  const lines = (result.stdout ?? "").trim().split("\n");
+  const last = lines.pop();
+  const devices = lines.find((l) => l.startsWith("devices "))?.slice(8).split(",").filter(Boolean) ?? [];
+  return { status: last === "ok" || last === "no-account" ? last : "no-entitlement", devices };
+}
+
+// Builds and installs the notifier signed with the iCloud container; needs Xcode and the sessionhue developer team.
+export function installRelayNotifier(): void {
+  const out = fs.mkdtempSync(path.join(os.tmpdir(), "sessionhue-"));
+  const result = spawnSync("bash", [path.join(PACKAGE_ROOT, "native", "build.sh"), "--icloud", out], { stdio: ["ignore", "ignore", "inherit"] });
+  if (result.status !== 0) throw new Error("building the iCloud notifier failed (needs Xcode, xcodegen and the sessionhue developer team)");
+  fs.rmSync(NOTIFIER_APP, { recursive: true, force: true });
+  fs.cpSync(path.join(out, "sessionhue.app"), NOTIFIER_APP, { recursive: true });
 }
 
 // Installs the notifier app: the prebuilt one from the package, or a fresh build when Xcode tools are there.

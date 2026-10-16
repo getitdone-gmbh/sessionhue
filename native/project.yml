@@ -1,0 +1,43 @@
+# Notifier with iCloud, so it can relay notifications to iPhone and Apple Watch: `./build.sh --icloud`.
+name: sessionhue-notifier
+options:
+  deploymentTarget:
+    macOS: "12.0"
+settings:
+  base:
+    DEVELOPMENT_TEAM: K6WRJB8J4N
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_HARDENED_RUNTIME: YES
+    SWIFT_VERSION: "5.0"
+targets:
+  sessionhue:
+    type: application
+    platform: macOS
+    sources:
+      - notify.swift
+      - path: icon.icns
+        buildPhase: resources
+    info:
+      path: build/Info.plist
+      properties:
+        CFBundleIdentifier: com.getitdone.sessionhue
+        CFBundleName: sessionhue
+        CFBundleDisplayName: sessionhue
+        CFBundleIconFile: icon
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(MARKETING_VERSION)
+        LSMinimumSystemVersion: "12.0"
+        LSUIElement: true
+        NSUserNotificationAlertStyle: alert
+        NSAppleEventsUsageDescription: sessionhue types your answer from a notification into the terminal session it belongs to.
+    entitlements:
+      path: build/icloud.entitlements
+      properties:
+        com.apple.security.automation.apple-events: true
+        com.apple.developer.icloud-container-identifiers: [iCloud.com.getitdone.sessionhue]
+        com.apple.developer.icloud-services: [CloudKit]
+        com.apple.developer.aps-environment: development
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.getitdone.sessionhue
+        PRODUCT_NAME: sessionhue

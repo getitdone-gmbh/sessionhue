@@ -3,3 +3,4 @@ node_modules/
 dist/
 release/
 native/build/
+native/sessionhue-notifier.xcodeproj/

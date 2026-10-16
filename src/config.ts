@@ -11,6 +11,14 @@ export type Preset = {
   match: string[];
 };
 
+export type Remote = {
+  iphone: boolean;
+  /** Only approvals and questions with choices go to the watch. */
+  watch: boolean;
+  /** Minutes without input before a waiting notification goes to the phone; a locked Mac counts at once. */
+  awayMinutes: number;
+};
+
 export type Config = {
   presets: Preset[];
   /** Minimum contrast between the indicator color and the label on top of it. */
@@ -19,6 +27,8 @@ export type Config = {
   autoColorUnknownRepos: boolean;
   /** Give every other session its own color on `apply`, distinct from all open sessions. */
   autoColorSessions: boolean;
+  /** Forward notifications to iPhone and Apple Watch while the Mac is locked or unused. */
+  remote: Remote;
 };
 
 const DEFAULTS: Config = {
@@ -26,6 +36,7 @@ const DEFAULTS: Config = {
   contrast: "AAA",
   autoColorUnknownRepos: false,
   autoColorSessions: true,
+  remote: { iphone: false, watch: false, awayMinutes: 3 },
 };
 
 export const CONFIG_DIR = process.env.SESSIONHUE_HOME ?? path.join(os.homedir(), ".config", "sessionhue");
@@ -34,9 +45,9 @@ const CONFIG_FILE = path.join(CONFIG_DIR, "config.json");
 export function loadConfig(): Config {
   try {
     const raw = JSON.parse(fs.readFileSync(CONFIG_FILE, "utf8"));
-    return { ...DEFAULTS, ...raw, presets: raw.presets ?? [] };
+    return { ...DEFAULTS, ...raw, presets: raw.presets ?? [], remote: { ...DEFAULTS.remote, ...raw.remote } };
   } catch {
-    return { ...DEFAULTS, presets: [] };
+    return { ...DEFAULTS, presets: [], remote: { ...DEFAULTS.remote } };
   }
 }
 
