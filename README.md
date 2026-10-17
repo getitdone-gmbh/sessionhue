@@ -36,7 +36,7 @@ Paste this into Terminal:
 ### npm
 
 ```sh
-npm install -g https://github.com/getitdone-gmbh/sessionhue/releases/latest/download/sessionhue.tgz
+npm install -g sessionhue
 sessionhue setup
 ```
 
