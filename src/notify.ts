@@ -207,7 +207,8 @@ function readPending(tty: string): Pending | null {
 // Hooks for clearing run in the background, so one can arrive after a newer notification was posted.
 export function outdatedBy(pending: Pending, event: AgentEvent, happenedAt: number): boolean {
   if (pending.at > happenedAt) return false;
-  if (event.hook_event_name === "PostToolUse" && pending.tool && pending.tool !== toolKey(event)) return false;
+  // A done notice waits for the next prompt; the last tool's PostToolUse can start after Stop, so its time proves nothing.
+  if (event.hook_event_name === "PostToolUse" && pending.tool !== toolKey(event)) return false;
   return true;
 }
 
@@ -215,6 +216,7 @@ export function clearNotice(tty: string, event: AgentEvent, happenedAt: number):
   const pending = readPending(tty);
   if (!pending || !outdatedBy(pending, event, happenedAt)) return;
   fs.rmSync(pendingFile(tty), { force: true });
+  log(`clear ${tty} on ${event.hook_event_name}${event.tool_name ? ` ${event.tool_name}` : ""}`);
   runNotifier(["clear", notificationId(tty)]);
 }
 

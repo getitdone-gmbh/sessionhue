@@ -66,6 +66,12 @@ test("clearing: a late background hook never removes a newer notification", () =
   assert.equal(outdatedBy(stop, { hook_event_name: "UserPromptSubmit" }, 2500), true);
 });
 
+test("clearing: the last tool's late PostToolUse keeps the done notice open", () => {
+  const stop = { token: "t", at: 2000, tool: "" };
+  assert.equal(outdatedBy(stop, { hook_event_name: "PostToolUse", tool_name: "Bash" }, 2600), false);
+  assert.equal(outdatedBy(stop, { hook_event_name: "SessionEnd" }, 2600), true);
+});
+
 test("clearing: another tool finishing in parallel keeps an approval open", () => {
   const bash = { hook_event_name: "PermissionRequest", tool_name: "Bash", tool_input: { command: "npm test" } };
   const pending = { token: "t", at: 1000, tool: toolKey(bash) };
