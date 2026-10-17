@@ -1,5 +1,7 @@
 # sessionhue · terminal session colors
 
+[![npm](https://img.shields.io/npm/v/sessionhue)](https://www.npmjs.com/package/sessionhue) [![License: 0BSD](https://img.shields.io/npm/l/sessionhue)](LICENSE)
+
 Give every terminal session its own color and title, so you can tell 10, 20 or 50 open sessions apart at a glance. Built for people who run many sessions in parallel, for example several Claude Code agents in different repos.
 
 ![Six Claude Code sessions in iTerm2, each window with its own colored title bar: checkout-api in blue, web-shop in orange, mobile-app in green, design-system in purple, infra in red, docs in teal](docs/sessions.png)
