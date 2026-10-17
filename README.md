@@ -4,7 +4,7 @@
 
 Give every terminal session its own color and title, so you can tell 10, 20 or 50 open sessions apart at a glance. Built for people who run many sessions in parallel, for example several Claude Code agents in different repos.
 
-![Six Claude Code sessions in iTerm2, each window with its own colored title bar: checkout-api in blue, web-shop in orange, mobile-app in green, design-system in purple, infra in red, docs in teal](docs/sessions.png)
+![Six Claude Code sessions in iTerm2, each window with its own colored title bar: checkout-api in blue, web-shop in orange, mobile-app in green, design-system in purple, infra in red, docs in teal](https://raw.githubusercontent.com/getitdone-gmbh/sessionhue/master/docs/sessions.png)
 
 > [!IMPORTANT]
 > **The colored title bar needs [iTerm2](https://iterm2.com) (free).** macOS Terminal.app cannot color its title bar or tabs, so there you only get a small colored dot in the tab title. `sessionhue setup` installs and configures iTerm2 for you, and your shell, prompt and plugins stay exactly as they are. [Why?](#which-terminal)
@@ -167,9 +167,9 @@ You get a native macOS notification when an agent:
 - **asks a question** (Claude Code): one entry per answer, plus **Own answer…** for free text.
 
 <p>
-  <img src="docs/notify-approval.png" width="372" alt="sessionhue notification for the blue session checkout-api: needs your approval for Bash, run the database migration. The options menu shows Allow, Always allow, Deny and Deny with note.">
-  <img src="docs/notify-question.png" width="372" alt="sessionhue notification for the blue session checkout-api asking which database the new orders service should use. The options menu shows Postgres, SQLite, Keep MongoDB and Own answer.">
-  <img src="docs/notify-done.png" width="372" alt="Expanded sessionhue notification for the blue session checkout-api: the agent asks whether to open a pull request, with a text field to answer and a Send button.">
+  <img src="https://raw.githubusercontent.com/getitdone-gmbh/sessionhue/master/docs/notify-approval.png" width="372" alt="sessionhue notification for the blue session checkout-api: needs your approval for Bash, run the database migration. The options menu shows Allow, Always allow, Deny and Deny with note.">
+  <img src="https://raw.githubusercontent.com/getitdone-gmbh/sessionhue/master/docs/notify-question.png" width="372" alt="sessionhue notification for the blue session checkout-api asking which database the new orders service should use. The options menu shows Postgres, SQLite, Keep MongoDB and Own answer.">
+  <img src="https://raw.githubusercontent.com/getitdone-gmbh/sessionhue/master/docs/notify-done.png" width="372" alt="Expanded sessionhue notification for the blue session checkout-api: the agent asks whether to open a pull request, with a text field to answer and a Send button.">
 </p>
 
 The title is the name of the iTerm2 session (the topic Claude Code gives it) and its window color, e.g. "Workbase renaming · yellow". The answers are under **Options** when you hover the notification. sessionhue types your choice into the iTerm2 session the notification belongs to, so the terminal and the notification always show the same state. Clicking the notification brings that session to the front.
