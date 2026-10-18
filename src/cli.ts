@@ -406,7 +406,7 @@ function notifyStatus(): void {
   const { status: relay, devices } = relayCheck();
   const relayText = { ok: "ready", "no-entitlement": "needs the iCloud notifier (turn a device on to build it)", "no-account": "sign in to iCloud on this Mac", missing: "run `sessionhue notify setup`" }[relay];
   console.log(`Mac:         ${notifierInstalled() ? "on" : "off"}`);
-  const app = (device: string) => (relay !== "ok" ? "" : devices.includes(device) ? ", app connected" : ", app not connected yet (open it once)");
+  const app = (device: string) => (relay !== "ok" ? "" : devices.includes(device) ? ", app connected" : `, app not connected yet (open it once${device === "watch" ? ", then answer a notice on the watch" : ""})`);
   console.log(`iPhone:      ${remote.iphone ? "on" : "off"}${remote.iphone ? app("phone") : ""}`);
   console.log(`Apple Watch: ${remote.watch ? "on" : "off"} (approvals and questions with choices)${remote.watch ? app("watch") : ""}`);
   console.log(`Forwarding:  after ${remote.awayMinutes} min without input, or at once when the Mac is locked`);

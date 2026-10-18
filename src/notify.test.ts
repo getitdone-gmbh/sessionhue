@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { allDone, colorWord, waitingOnTimer, gist, noticeFor, outdatedBy, plain, toolKey } from "./notify.js";
+import { allDone, colorWord, waitingOnTimer, gist, noticeFor, outdatedBy, plain, seenDevices, toolKey } from "./notify.js";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
 test("Stop: done notice with the last message and a reply field", () => {
   const n = noticeFor({ hook_event_name: "Stop", last_assistant_message: "All **tests** pass.\n\nShip it?" }, "api", "en")!;
@@ -106,4 +109,11 @@ test("allDone: only when nothing runs, nothing is scheduled and nothing is named
   assert.equal(allDone({}, "Als Nächstes kommt das Review."), false);
   assert.equal(allDone({ session_crons: [{ id: "c" }] }, "Done."), false);
   assert.equal(allDone({ background_tasks: [{ id: "a" }] }, "Done."), false);
+});
+
+test("status: a device that answered counts as connected", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "seen-"));
+  assert.deepEqual(seenDevices(path.join(dir, "missing")), []);
+  for (const f of ["watch", "other"]) fs.writeFileSync(path.join(dir, f), "2026-10-18T06:59:10Z");
+  assert.deepEqual(seenDevices(dir), ["watch"]);
 });

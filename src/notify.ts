@@ -255,6 +255,15 @@ export function handleEvent(event: AgentEvent, tty: string, kind: TerminalKind):
   if (notice) postNotice(notice, tty, kind, name === "Stop" ? "" : toolKey(event));
 }
 
+// Devices that sent an answer back, recorded by the notifier.
+export function seenDevices(dir = path.join(CONFIG_DIR, "seen")): string[] {
+  try {
+    return fs.readdirSync(dir).filter((d) => d === "phone" || d === "watch");
+  } catch {
+    return [];
+  }
+}
+
 export type RelayStatus = "ok" | "no-entitlement" | "no-account" | "missing";
 
 // Whether the installed notifier can forward to iPhone and Apple Watch (iCloud build, signed in to iCloud).
@@ -268,7 +277,9 @@ export function relayCheck(): { status: RelayStatus; devices: string[] } {
   const result = spawnSync(NOTIFIER_BIN, ["relay-check"], { encoding: "utf8", timeout: 20_000 });
   const lines = (result.stdout ?? "").trim().split("\n");
   const last = lines.pop();
-  const devices = lines.find((l) => l.startsWith("devices "))?.slice(8).split(",").filter(Boolean) ?? [];
+  const listed = lines.find((l) => l.startsWith("devices "))?.slice(8).split(",").filter(Boolean) ?? [];
+  // iCloud does not list the watch's subscription to the Mac; a device that answered once counts as connected too.
+  const devices = [...new Set([...listed, ...seenDevices()])];
   return { status: last === "ok" || last === "no-account" ? last : "no-entitlement", devices };
 }
 

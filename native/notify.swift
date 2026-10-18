@@ -268,6 +268,14 @@ final class Relay {
         }
     }
 
+    // iCloud does not list the watch's subscription to the Mac, so an answer from a device is the proof that its app is connected.
+    func markSeen(_ device: String) {
+        guard let pending = p.pendingFile, !pending.isEmpty, device.allSatisfy(\.isLetter) else { return }
+        let dir = URL(fileURLWithPath: pending).deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("seen")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try? ISO8601DateFormatter().string(from: Date()).write(to: dir.appendingPathComponent(device), atomically: true, encoding: .utf8)
+    }
+
     func forward() {
         let phone = remote.iphone
         let watch = remote.watch && remote.choices == true
@@ -312,7 +320,9 @@ final class Relay {
                 guard !self.answered, let record = found, let action = record["action"] as? String else { return }
                 self.answered = true
                 let text = record["text"] as? String
-                log("reply \(action) for \(self.p.tty) from \(record["device"] as? String ?? "phone")")
+                let device = record["device"] as? String ?? "phone"
+                log("reply \(action) for \(self.p.tty) from \(device)")
+                self.markSeen(device)
                 answer(self.info, action, text: text?.isEmpty == false || self.p.actions.first { $0.id == action }?.reply == true ? text ?? "" : nil)
                 center.removeDeliveredNotifications(withIdentifiers: [self.p.id])
                 self.finish()
