@@ -187,18 +187,48 @@ Closing a notification with **X** changes nothing: the agent keeps waiting in th
 
 When you are away from the Mac, notifications can follow you: as soon as the Mac is locked or unused for a few minutes, an open notification also goes to your iPhone, with its answers and a field for free text. Approvals and questions with choices can also go to your Apple Watch. Your answer is typed into the session on the Mac, just like an answer from the Mac notification.
 
-```sh
-sessionhue notify iphone on      # also to your iPhone
-sessionhue notify watch on       # approvals and questions with choices also to Apple Watch
-sessionhue notify away 3         # minutes without input before forwarding (a locked Mac counts at once)
-sessionhue notify status         # what goes where, and whether the apps are connected
-sessionhue notify test --phone   # send a test notification to the iPhone right away
-sessionhue notify iphone off     # and back off
-```
+Everything goes through your own iCloud (private CloudKit database): no server, no account, no costs.
 
-`sessionhue setup` asks for both too, off by default. On the iPhone, touch and hold the notification for the answers, or tap it to answer in the app. When you answer on the Mac or in the terminal first, the notification disappears from the phone.
+**You need**
 
-Everything goes through your own iCloud (private CloudKit database): no server, no account, no costs. It needs the sessionhue app on your iPhone (beta on TestFlight: [join the beta](https://testflight.apple.com/join/1bP3DW3m)), opened once to allow notifications, with the same Apple Account as on the Mac.
+| Device | Requirements |
+| --- | --- |
+| Mac | macOS 12 or newer, sessionhue 0.5.3 or newer, iTerm2, signed in to iCloud |
+| iPhone | iOS 17 or newer, the **Session Hue** app ([join the beta on TestFlight](https://testflight.apple.com/join/1bP3DW3m)), signed in to iCloud |
+| Apple Watch (optional) | watchOS 10 or newer, paired with that iPhone |
+
+Mac and iPhone must use **the same Apple Account**.
+
+**Set up in five steps**
+
+1. **iPhone:** install Session Hue, open it and allow notifications. Under Status, all three rows show Ready.
+2. **Apple Watch:** open the **Watch** app on the iPhone, go to **My Watch**, scroll to **Available Apps** and tap **Install** next to Session Hue. Open Session Hue on the watch once, tap **Status** and allow notifications.
+3. **Mac:** turn forwarding on.
+   ```sh
+   sessionhue notify iphone on
+   sessionhue notify watch on
+   ```
+4. **Check:** `sessionhue notify status` shows `app connected` for the iPhone.
+   ```sh
+   sessionhue notify status
+   ```
+5. **Test:** `sessionhue notify test --phone` sends a notification to the iPhone right away. Answer it there, and the answer appears in your terminal.
+
+The Apple Watch shows as `app connected` after you answered one approval or question on it, because iCloud does not report the watch to the Mac until then. `sessionhue setup` asks for iPhone and Apple Watch too, off by default.
+
+**Everyday use**
+
+- On the iPhone, touch and hold a notification for its answers, or tap it to answer in the app. The app also lists everything still waiting.
+- When you answer on the Mac or in the terminal first, the notification disappears from the phone.
+- `sessionhue notify away 3` sets the minutes without input before forwarding; a locked Mac forwards at once.
+- `sessionhue notify iphone off` and `sessionhue notify watch off` turn it off again.
+
+**Nothing arrives?**
+
+- `sessionhue notify status` says `app not connected yet`: open Session Hue on the iPhone once more and check that all three checks are green.
+- `iCloud: sign in to iCloud on this Mac`: System Settings > Apple Account, with the same Apple Account as on the iPhone.
+- Notifications only go to the phone while the Mac is locked or unused (`sessionhue notify away`). To try it right away, use `sessionhue notify test --phone`.
+- The Apple Watch only gets approvals and questions with choices, not "done" notices.
 
 ## Colors
 
